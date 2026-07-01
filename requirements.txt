@@ -1,0 +1,11 @@
+# Core
+pydantic>=2          # strict validation of LLM-extracted claims
+certifi>=2023.7.22   # CA bundle for verifying sec.gov TLS (SEC EDGAR fetch)
+
+# Dev / test
+pytest>=7
+
+# Model backends — install the one you call (NOT needed for the verifier,
+# the tests, or the offline `--replay` benchmark, which use saved outputs):
+#   pip install anthropic
+#   pip install openai

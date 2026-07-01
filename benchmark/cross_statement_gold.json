@@ -1,0 +1,117 @@
+{
+  "description": "Phase 2 cross-statement consistency synthetic gold set. Each document is a small constructed financial statement with KNOWN-correct or KNOWN-broken internal relationships. Ground truth is exact; the benchmark runs tolerance-to-zero against the rule functions to prove rule-function precision (should be near-perfect — it is pure arithmetic). Real-document accuracy is reported separately and is NOT claimed to match this.",
+  "documents": [
+    {
+      "id": "CS1",
+      "name": "Clean 10-K (everything ties)",
+      "doc_type": "10-K",
+      "expected_applicable_rules": ["balance_sheet_identity", "eps_reconciliation", "cash_flow_tie_out"],
+      "gold_claims": [
+        {
+          "rule_name": "balance_sheet_identity",
+          "operands": [1500.0, 900.0, 600.0],
+          "eps_variant": null,
+          "expected_status": "VERIFIED",
+          "note": "1500 == 900 + 600"
+        },
+        {
+          "rule_name": "eps_reconciliation",
+          "operands": [2.00, 200.0, 100.0],
+          "eps_variant": "diluted",
+          "expected_status": "VERIFIED",
+          "note": "2.00 == 200 / 100, diluted shares tagged"
+        },
+        {
+          "rule_name": "cash_flow_tie_out",
+          "operands": [130.0, 130.0],
+          "eps_variant": null,
+          "expected_status": "VERIFIED",
+          "note": "ending cash == balance-sheet cash"
+        }
+      ]
+    },
+    {
+      "id": "CS2",
+      "name": "Balance sheet does NOT balance",
+      "doc_type": "10-K",
+      "expected_applicable_rules": ["balance_sheet_identity"],
+      "gold_claims": [
+        {
+          "rule_name": "balance_sheet_identity",
+          "operands": [1500.0, 900.0, 650.0],
+          "eps_variant": null,
+          "expected_status": "WRONG_MATH",
+          "note": "1500 != 900 + 650 — the company's own numbers don't add up"
+        }
+      ]
+    },
+    {
+      "id": "CS3",
+      "name": "EPS does not reconcile",
+      "doc_type": "10-Q",
+      "expected_applicable_rules": ["eps_reconciliation"],
+      "gold_claims": [
+        {
+          "rule_name": "eps_reconciliation",
+          "operands": [2.50, 200.0, 100.0],
+          "eps_variant": "basic",
+          "expected_status": "WRONG_MATH",
+          "note": "stated 2.50 but 200/100 = 2.00"
+        }
+      ]
+    },
+    {
+      "id": "CS4",
+      "name": "Cash flow does not tie out",
+      "doc_type": "10-K",
+      "expected_applicable_rules": ["cash_flow_tie_out"],
+      "gold_claims": [
+        {
+          "rule_name": "cash_flow_tie_out",
+          "operands": [130.0, 125.0],
+          "eps_variant": null,
+          "expected_status": "WRONG_MATH",
+          "note": "ending cash 130 != balance-sheet cash 125"
+        }
+      ]
+    },
+    {
+      "id": "CS5",
+      "name": "Press release (no balance sheet) — rules must NOT apply",
+      "doc_type": "press_release",
+      "expected_applicable_rules": [],
+      "gold_claims": []
+    },
+    {
+      "id": "CS6",
+      "name": "EPS basic/diluted confound — must NOT false-flag",
+      "doc_type": "10-K",
+      "expected_applicable_rules": ["eps_reconciliation"],
+      "gold_claims": [
+        {
+          "rule_name": "eps_reconciliation",
+          "operands": [2.00, 200.0, 110.0],
+          "eps_variant": "basic",
+          "shares_category": "diluted",
+          "expected_status": "AMBIGUOUS",
+          "note": "stated BASIC eps but DILUTED shares grounded — §4 guard must produce AMBIGUOUS, NOT a false WRONG_MATH"
+        }
+      ]
+    },
+    {
+      "id": "CS7",
+      "name": "Rounding-sized noise within tolerance — must VERIFY",
+      "doc_type": "10-K",
+      "expected_applicable_rules": ["balance_sheet_identity"],
+      "gold_claims": [
+        {
+          "rule_name": "balance_sheet_identity",
+          "operands": [1500.0, 899.4, 600.5],
+          "eps_variant": null,
+          "expected_status": "VERIFIED",
+          "note": "0.0067% gap is rounding noise, within the 0.1% balance-sheet tolerance"
+        }
+      ]
+    }
+  ]
+}

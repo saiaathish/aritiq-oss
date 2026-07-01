@@ -1,0 +1,12 @@
+# Aritiq backend
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2
+certifi>=2023.7.22   # CA bundle for verifying sec.gov TLS (SEC EDGAR fetch)
+
+# Inherited from the core package (verifier + extractor):
+#   pydantic (above)
+# Optional model backends for auditing CUSTOM documents (bundled examples
+# replay without a key):
+#   pip install anthropic        # default provider
+#   pip install openai           # set ARITIQ_PROVIDER=openai

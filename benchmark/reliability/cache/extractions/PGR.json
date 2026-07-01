@@ -1,0 +1,7 @@
+{
+  "ticker": "PGR",
+  "raw": "[\n  {\n    \"claim_text\": \"The Progressive Corporation (Parent Company) balance sheet identity: Total assets of $45,502 million must equal total liabilities of $15,179 million plus total shareholders' equity of $30,323 million for the period ended December 31, 2025.\",\n    \"operation\": \"internal_consistency\",\n    \"rule_name\": \"balance_sheet_identity\",\n    \"stated_value\": null,\n    \"eps_variant\": null,\n    \"operands\": [\n      {\n        \"value\": 45502,\n        \"source\": \"grounded\",\n        \"source_text\": \"45,502\",\n        \"category\": \"total_assets\"\n      },\n      {\n        \"value\": 15179,\n        \"source\": \"grounded\",\n        \"source_text\": \"15,179\",\n        \"category\": \"total_liabilities\"\n      },\n      {\n        \"value\": 30323,\n        \"source\": \"grounded\",\n        \"source_text\": \"30,323\",\n        \"category\": \"total_equity\"\n      }\n    ],\n    \"params\": {\n      \"liabilities_complete\": true\n    },\n    \"unit\": \"$M\",\n    \"source_text\": \"Total assets $ 45,502 ... Total liabilities 15,179 ... Total shareholders' equity 30,323\",\n    \"notes\": null\n  }\n]",
+  "provider": "gemini",
+  "model": "gemini-3.1-flash-lite-preview",
+  "fetched_at": "2026-07-01T00:13:22Z"
+}

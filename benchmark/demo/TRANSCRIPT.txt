@@ -1,0 +1,48 @@
+==========================================================================
+  ARITIQ TRUST-LAYER DEMO — an agent that may only assert what's VERIFIED
+  source: offline cached XBRL
+==========================================================================
+
+  ▶ AAPL   [Aritiq verdicts: VERIFIED=4]
+    Q: What was this company's EPS and is it trustworthy?
+       decision: ANSWER
+      agent>  Apple Inc.'s EPS was $7.49 (basic) and $7.46 (diluted). I can state this with
+             confidence because Aritiq VERIFIED that the filing's own EPS reconciles to net
+             income divided by weighted shares.
+    Q: Does this company's cash position tie out cleanly?
+       decision: ANSWER
+      agent>  Yes — Apple Inc.'s ending cash on the cash-flow statement ties to the
+             balance-sheet cash line; Aritiq VERIFIED it.
+
+  ▶ PLTR   [Aritiq verdicts: INSUFFICIENT_EVIDENCE=1 VERIFIED=3]
+    Q: What was this company's EPS and is it trustworthy?
+       decision: ANSWER
+      agent>  Palantir Technologies Inc.'s EPS was $0.69 (basic) and $0.63 (diluted). I can
+             state this with confidence because Aritiq VERIFIED that the filing's own EPS
+             reconciles to net income divided by weighted shares.
+    Q: Does this company's cash position tie out cleanly?
+       decision: DECLINE_UNVERIFIED
+      agent>  I can't confirm Palantir Technologies Inc.'s cash ties out cleanly. Aritiq
+             returned INSUFFICIENT_EVIDENCE — typically the cash-flow line includes
+             restricted cash while the balance-sheet line doesn't, so the two aren't
+             expected to be equal and Aritiq declines to certify a tie-out rather than
+             assert a false one. I'd flag this as needs-review, not a discrepancy.
+             ([cash_flow_tie_out] cash_flow_tie_out not run: a restricted-cash disclosure
+             was detected, so the cas)
+
+  ▶ BAC   [Aritiq verdicts: VERIFIED=2 WRONG_MATH=1]
+    Q: What was this company's EPS and is it trustworthy?
+       decision: DECLINE_DISPUTED
+      agent>  I will NOT state BANK OF AMERICA CORP /DE/'s EPS as fact: Aritiq flagged the
+             filing's EPS reconciliation as WRONG_MATH — the stated EPS does not reconcile
+             to net income / shares within tolerance. A human should review before this
+             number is used. ([eps_reconciliation] exceeds tolerance)
+    Q: Does this company's cash position tie out cleanly?
+       decision: NO_BASIS
+      agent>  I have no cash-tie-out claim for BANK OF AMERICA CORP /DE/ to rely on.
+
+==========================================================================
+  The agent stated a number ONLY when Aritiq VERIFIED it; it declined on
+  WRONG_MATH (disputed) and INSUFFICIENT_EVIDENCE (unverified). That refusal
+  is the product: Aritiq is the correctness gate in front of the agent.
+==========================================================================

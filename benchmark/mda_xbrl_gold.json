@@ -1,0 +1,56 @@
+[
+  {
+    "id": "revenue_up_matches",
+    "metric": "revenue",
+    "excerpt": "Revenue increased due to higher subscription demand.",
+    "direction": "up",
+    "prior_value": 100.0,
+    "current_value": 112.0,
+    "expected_status": "VERIFIED"
+  },
+  {
+    "id": "revenue_up_conflicts_decline",
+    "metric": "revenue",
+    "excerpt": "Revenue grew during the year.",
+    "direction": "up",
+    "prior_value": 100.0,
+    "current_value": 88.0,
+    "expected_status": "CONFLICT"
+  },
+  {
+    "id": "margin_down_matches",
+    "metric": "net_margin",
+    "excerpt": "Profitability declined compared with the prior year.",
+    "direction": "down",
+    "prior_value": 20.0,
+    "current_value": 17.0,
+    "expected_status": "VERIFIED"
+  },
+  {
+    "id": "flatish_needs_review",
+    "metric": "revenue",
+    "excerpt": "Revenue was stable compared with the prior year.",
+    "direction": "flat",
+    "prior_value": 100.0,
+    "current_value": 101.0,
+    "expected_status": "NEEDS_REVIEW"
+  },
+  {
+    "id": "flat_claim_large_change_needs_review",
+    "metric": "revenue",
+    "excerpt": "Revenue was relatively flat year over year.",
+    "direction": "flat",
+    "prior_value": 100.0,
+    "current_value": 108.0,
+    "expected_status": "NEEDS_REVIEW"
+  },
+  {
+    "id": "income_down_conflicts_growth",
+    "metric": "net_income",
+    "excerpt": "Net income decreased from the prior year.",
+    "direction": "down",
+    "prior_value": 50.0,
+    "current_value": 65.0,
+    "expected_status": "CONFLICT"
+  }
+]

@@ -1,0 +1,10 @@
+# ticker: JPM
+# form: 10-K
+# period_end: 2025-12-31
+# company: JPMORGAN CHASE & CO
+# n_claims: 3
+# source: XBRL-grounded (SEC companyfacts)
+row,claim_text,operation,rule_name,eps_variant,operands,operand_sources,stated_value,verdict,recomputed_value,delta,caused_by,explanation,source_text,run_timestamp
+1,[XBRL] JPM balance sheet identity,internal_consistency,balance_sheet_identity,,4424900000000 | 4062462000000 | 362438000000,total_assets; XBRL Assets [grounded]; total_liabilities; XBRL Liabilities [grounded]; total_equity; XBRL StockholdersEquity [grounded],,VERIFIED,4424900000000,0,,[balance_sheet_identity] within tolerance,"XBRL tags: Assets, Liabilities, StockholdersEquity",2026-07-01T01:39:57+00:00
+2,[XBRL] JPM basic EPS reconciliation,internal_consistency,eps_reconciliation,basic,20.05 | 55681000000 | 2776500000,basic; XBRL EarningsPerShareBasic [grounded]; common; XBRL NetIncomeLossAvailableToCommonStockholdersBasic [grounded]; basic; XBRL WeightedAverageNumberOf...Basic [grounded],,VERIFIED,20.0544,-0.00438502,,[eps_reconciliation] within tolerance,"XBRL tags: EarningsPerShareBasic, NetIncomeLossAvailableToCommonStockholdersBasic, shares Basic",2026-07-01T01:39:57+00:00
+3,[XBRL] JPM diluted EPS reconciliation,internal_consistency,eps_reconciliation,diluted,20.02 | 55681000000 | 2781500000,diluted; XBRL EarningsPerShareDiluted [grounded]; common; XBRL NetIncomeLossAvailableToCommonStockholdersBasic [grounded]; diluted; XBRL WeightedAverageNumberOf...Diluted [grounded],,VERIFIED,20.0183,0.00166457,,[eps_reconciliation] within tolerance,"XBRL tags: EarningsPerShareDiluted, NetIncomeLossAvailableToCommonStockholdersBasic, shares Diluted",2026-07-01T01:39:57+00:00
