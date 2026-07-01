@@ -55,6 +55,12 @@ export function ClaimRow({ result }: { result: Result }) {
   const titleText = isInternal ? ruleCfg?.name ?? "Internal Consistency" : prettyOp(claim.operation);
   // Secondary line: the formula for internal checks, the claim sentence otherwise.
   const subText = isInternal ? ruleCfg?.formula ?? "Document self-check" : claim.claim_text;
+  const statusHint =
+    result.status === "PROPAGATED_ERROR"
+      ? "Depends on failed upstream claim — not an independent math error."
+      : result.status === "INSUFFICIENT_EVIDENCE"
+        ? "Verifier declined to convict because required evidence or scope is incomplete."
+        : null;
 
   // For internal checks with no stated_value, show the asserted (first operand)
   // figure in the Stated column so the row isn't blank.
@@ -88,6 +94,7 @@ export function ClaimRow({ result }: { result: Result }) {
               <TypeTag group={group} />
             </div>
             <div className="truncate text-xs text-muted">{subText}</div>
+            {statusHint && <div className={cn("mt-1 truncate text-[11px]", cfg.text)}>{statusHint}</div>}
           </div>
           <div className="tnum text-right text-sm text-foreground">{fmt(statedDisplay)}</div>
           <div className="tnum text-right text-sm text-foreground">{fmt(result.recomputed_value)}</div>
@@ -111,6 +118,7 @@ export function ClaimRow({ result }: { result: Result }) {
               <TypeTag group={group} />
             </div>
             <div className="truncate text-xs text-muted">{subText}</div>
+            {statusHint && <div className={cn("mt-1 text-[11px]", cfg.text)}>{statusHint}</div>}
           </div>
           <ChevronDown
             className={cn("h-5 w-5 shrink-0 text-muted transition-transform duration-200", open && "rotate-180")}

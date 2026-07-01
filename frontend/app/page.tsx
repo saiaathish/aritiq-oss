@@ -6,6 +6,7 @@ import { ShieldCheck, Lock, Loader2, ScanSearch, AlertTriangle, Building2, Exter
 import { InputPanel, type InputMode } from "@/components/InputPanel";
 import { ScoreRing } from "@/components/ScoreRing";
 import { ClaimsTable } from "@/components/ClaimsTable";
+import { DependencyGraph } from "@/components/DependencyGraph";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Card } from "@/components/ui/card";
 import { audit, auditDocuments, auditTicker, getExamples, ApiError } from "@/lib/api";
@@ -132,6 +133,8 @@ export default function Page() {
               {result.conflicts && result.conflicts.length > 0 && (
                 <ConflictsPanel conflicts={result.conflicts} />
               )}
+
+              <DependencyGraph results={result.results} />
 
               <ClaimsTable results={result.results} />
             </motion.div>
