@@ -35,3 +35,5 @@ benchmark/reliability/cache/runs/*_review.csv
 # fixtures the offline test suite and demos rely on.
 benchmark/reliability/cache/xbrl/
 benchmark/reliability/cache/filings/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
