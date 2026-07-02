@@ -1,6 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+// Force Node.js runtime — the Supabase JS client uses `process.version` which
+// is unavailable in Edge Runtime and causes FUNCTION_INVOCATION_FAILED on Vercel.
+export const runtime = "nodejs";
+
 /**
  * Refreshes the Supabase session cookie on every matched request and gates the
  * product UI: unauthenticated visits to /app redirect to /login (with a `next`
@@ -10,9 +14,19 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // If Supabase env vars are missing, skip auth gating entirely so the
+  // deployment doesn't crash with a 500 on every matched route.
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn("Supabase env vars missing — skipping auth middleware");
+    return response;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseKey,
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
