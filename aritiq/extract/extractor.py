@@ -26,6 +26,7 @@ from typing import Callable, List, Optional
 from ..core.schema import Claim
 from .prompt import build_system_prompt, build_user_prompt
 from .schema import ExtractionIssue, parse_claims
+from .linker import link_claims
 
 # (system_prompt, user_prompt) -> raw model text
 CompletionFn = Callable[[str, str], str]
@@ -267,6 +268,13 @@ def extract_claims(
 
     raw = complete_fn(system_prompt, user_prompt)
     claims, issues = parse_claims(raw)
+
+    # Populate depends_on edges (Phase 2, item 1). The prompt asks the LLM to tag
+    # output->input edges; this deterministic pass adds any it missed, so the
+    # provenance graph / weighted score / restatement machinery actually receive
+    # structure on real extraction. Pure code, extraction-side — the firewall is
+    # untouched. `source` lets the linker exclude raw source figures (see linker.py).
+    claims = link_claims(claims, source_text=source)
 
     return ExtractionOutput(
         claims=claims,

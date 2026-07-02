@@ -99,6 +99,7 @@ def check_balance_sheet_identity(
     *,
     liabilities_complete: Optional[bool] = None,
     nci_in_context: bool = False,
+    redeemable_equity_present: bool = False,
 ) -> CheckResult:
     """Assets == Liabilities + Equity.  Operand order: [assets, liabilities, equity].
 
@@ -182,6 +183,34 @@ def check_balance_sheet_identity(
                     "Declining to convict — fix: ground the filer's 'Total equity' "
                     "(incl. noncontrolling interests) line."),
         )
+
+    # MEZZANINE / TEMPORARY-EQUITY COMPLETENESS GATE (the Welltower / UPREIT fix).
+    # Some filers — REITs structured as umbrella partnerships, and any issuer with
+    # REDEEMABLE noncontrolling interests / redeemable operating-partnership units —
+    # carry a "temporary" (mezzanine) equity block that sits BETWEEN total
+    # liabilities and permanent equity and is captured by NEITHER the Liabilities
+    # tag NOR either StockholdersEquity tag. The face-of-statement identity is then
+    # Assets = Liabilities + Mezzanine + Equity, so a permanent-equity operand makes
+    # the two-term tie-out fall short by exactly the mezzanine block. When the tie-out
+    # FAILS and a redeemable/temporary-equity line is disclosed (flag set from the
+    # filer's own XBRL RedeemableNoncontrollingInterest.../TemporaryEquity... tag or
+    # named in grounded context), the equity picture is provably INCOMPLETE, so we
+    # decline rather than convict. Evidence-required, failure-only: it never changes a
+    # VERIFIED result and never fires without a disclosed mezzanine line.
+    if result.status == VerificationStatus.WRONG_MATH and redeemable_equity_present:
+        return CheckResult(
+            status=VerificationStatus.INSUFFICIENT_EVIDENCE,
+            recomputed_value=expected,
+            delta=result.delta,
+            reason=("balance_sheet_identity tie-out failed, but the filer discloses a "
+                    "redeemable / temporary (mezzanine) equity line that sits between "
+                    "total liabilities and permanent equity and is outside both the "
+                    "Liabilities and StockholdersEquity operands. The true identity is "
+                    "Assets = Liabilities + Mezzanine + Equity, so the equity picture "
+                    "here is incomplete — declining to convict. Fix: include the "
+                    "redeemable/temporary-equity block (e.g. UPREIT operating-"
+                    "partnership units) before checking the identity."),
+        )
     return result
 
 
@@ -217,6 +246,94 @@ def check_balance_sheet_identity_itemized(
         )
     expected = sum(liability_components) + equity
     return _classify(stated=assets, computed=expected, rel_tolerance=rel_tolerance)
+
+
+# A published figure's inferred precision is capped at this fraction of its own
+# magnitude. Trailing zeros in a raw-unit value (e.g. shares tagged "128000000")
+# usually mean the filer reported to a coarser scale (nearest million), but the
+# zeros are ambiguous — "5000000000" might be exact. Capping the inferred ULP at
+# 0.1% of the value guarantees the rounding tolerance can never widen enough to
+# swallow a genuine (multi-cent) EPS error; it only ever forgives sub-rounding gaps.
+_MAX_RELATIVE_ULP: float = 0.001
+
+
+def _decimal_half_ulp(value: float) -> float:
+    """Half the unit-in-the-last-place of a published number, inferred from its digits.
+
+    A figure printed as "224.2" carries ±0.05 of rounding; "3.31" carries ±0.005;
+    "6,288" (a whole number under an "in millions" header) carries ±0.5; and a value
+    tagged "128000000" with six trailing zeros was reported to the nearest million and
+    carries ±500,000. We read that granularity from the value's own shortest decimal
+    representation: fractional digits set the ULP for non-integers, trailing zeros set
+    it for whole numbers. The result is capped at `_MAX_RELATIVE_ULP` of the value so
+    an ambiguous run of zeros can never inflate the tolerance beyond a small relative
+    bound. Pure arithmetic/string inspection; no model, no accounting judgment.
+    """
+    v = abs(float(value))
+    if v == 0.0 or not math.isfinite(v):
+        return 0.0
+    s = repr(v)
+    if "e" in s or "E" in s:      # scientific notation; unknown precision, be conservative
+        return min(0.5, _MAX_RELATIVE_ULP * v)
+    if "." in s:
+        intpart, frac = s.split(".", 1)
+        frac = frac.rstrip("0")
+        if frac:                  # EXACT fractional digits (224.2 -> 0.1); never capped
+            return 0.5 * (10.0 ** (-len(frac)))
+    else:
+        intpart = s
+    # Whole number: infer granularity from TRAILING ZEROS (128000000 -> nearest
+    # million). Those zeros are ambiguous, so the relative cap applies here — and ONLY
+    # here — to keep an inferred coarse scale from inflating the tolerance. A whole
+    # number with no trailing zeros (6288) keeps ULP 1 (half 0.5), uncapped.
+    tz = len(intpart) - len(intpart.rstrip("0"))
+    half = 0.5 * (10.0 ** tz)
+    if tz > 0:
+        half = min(half, _MAX_RELATIVE_ULP * v)
+    return half
+
+
+def eps_rounding_tolerance(
+    stated_eps: float, net_income: float, shares: float,
+    floor: float = DEFAULT_EPS_ABS_TOLERANCE,
+) -> float:
+    """Absolute EPS tolerance implied by the PUBLISHED PRECISION of the operands.
+
+    EPS is `net_income / shares`, and each operand is printed already-rounded. The
+    smallest per-share discrepancy that a genuine arithmetic error (as opposed to
+    rounding of the inputs) could produce is bounded below by the rounding of the
+    inputs propagated through the division, plus the rounding of the stated EPS
+    itself:
+
+        tol = half_ulp(stated_eps)                      # published EPS is rounded
+            + half_ulp(net_income) / |shares|           # ∂(N/S)/∂N · ΔN
+            + |net_income| / shares**2 · half_ulp(shares)  # ∂(N/S)/∂S · ΔS
+
+    A gap within this band is INDISTINGUISHABLE from input rounding, so convicting it
+    would be a false WRONG_MATH (the Wayfair class: −313/128 = −2.445 vs published
+    −2.44, entirely explained by shares rounded to the nearest million). A gap beyond
+    it survives — a genuine multi-cent error still convicts.
+
+    Non-weakening guarantee: we take max(floor, propagated), so the tolerance is NEVER
+    tighter than the pre-existing flat `DEFAULT_EPS_ABS_TOLERANCE`. No claim that
+    verified before can flip to WRONG_MATH; only rounding-boundary convictions relax.
+    Pure arithmetic; deterministic; no model.
+    """
+    if shares == 0 or not all(math.isfinite(x) for x in (stated_eps, net_income, shares)):
+        return floor
+    # Stated-EPS rounding. EPS is published to at least two decimals (cents), so its
+    # rounding is at most half a cent. A round value like 2.00 collapses to the float
+    # 2.0 and would otherwise be mis-read as a whole number (±0.5); pin a whole-number
+    # EPS to half-cent precision so a lost trailing ".00" can't inflate the tolerance.
+    eps_half = _decimal_half_ulp(stated_eps)
+    if float(stated_eps) == int(stated_eps) and eps_half > floor:
+        eps_half = floor
+    propagated = (
+        eps_half
+        + _decimal_half_ulp(net_income) / abs(shares)
+        + abs(net_income) / (shares * shares) * _decimal_half_ulp(shares)
+    )
+    return max(floor, propagated)
 
 
 def check_eps_reconciliation(
@@ -310,7 +427,14 @@ def check_eps_reconciliation(
                     f"scale stated in the filing's '(in millions...)' header."),
         )
 
-    result = _classify(stated=stated_eps, computed=computed, abs_tolerance=abs_tolerance)
+    # Per-share rounding tolerance (the Wayfair-class fix): the flat 0.5-cent
+    # tolerance convicts figures whose only discrepancy is the rounding of the
+    # published operands propagated through the division. We widen the tolerance to
+    # exactly that rounding band (never below the flat floor), so a gap fully
+    # explained by input rounding VERIFIES while a genuine error still convicts.
+    eff_tolerance = eps_rounding_tolerance(stated_eps, net_income, shares,
+                                           floor=abs_tolerance)
+    result = _classify(stated=stated_eps, computed=computed, abs_tolerance=eff_tolerance)
 
     # WRONG-NUMERATOR SAFETY NET (Mechanism 1). Filers with preferred stock compute
     # EPS against NET INCOME APPLICABLE TO COMMON shareholders (total net income
@@ -424,6 +548,16 @@ def check_cash_flow_tie_out(
             reason=f"cash_flow_tie_out expects 2 operands, got {len(operands)}",
         )
     if restricted_cash_disclosed is True:
+        # Correct-caution decline (validated in the Phase-1 cash-flow investigation,
+        # STATUS.md). When a restricted-cash label/disclosure is present, the cash-flow
+        # ending cash may include restricted cash while the balance-sheet line is
+        # unrestricted, so the two are not expected to be equal. We deliberately do NOT
+        # try to "verify the equal case": when the two prose operands come back EQUAL it
+        # is just as often a same-line-grounded-twice extraction artifact (the extractor
+        # missed the real restricted difference — confirmed on KO/AVB/SO/RTX/BXP/AFRM,
+        # where XBRL shows cf≠bs but prose grounded identical figures) as a genuine zero
+        # restricted balance. Prose alone cannot tell them apart, so declining is the
+        # honest verdict; the independent XBRL lane recovers the genuine ties by tag.
         return CheckResult(
             status=VerificationStatus.INSUFFICIENT_EVIDENCE,
             reason=("cash_flow_tie_out not run: a restricted-cash disclosure was "
@@ -467,7 +601,8 @@ def run_internal_consistency_rule(
     if rule_name == "balance_sheet_identity":
         return check_balance_sheet_identity(
             operands, liabilities_complete=ev.get("liabilities_complete"),
-            nci_in_context=ev.get("nci_in_context", False))
+            nci_in_context=ev.get("nci_in_context", False),
+            redeemable_equity_present=ev.get("redeemable_equity_present", False))
     if rule_name == "eps_reconciliation":
         return check_eps_reconciliation(
             operands,

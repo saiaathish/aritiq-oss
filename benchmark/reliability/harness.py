@@ -108,6 +108,10 @@ from aritiq.extract.cross_statement import (  # noqa: E402
 )
 from aritiq.extract.schema import parse_claims  # noqa: E402
 from aritiq.edgar.sec import fetch_10k_text, EdgarError  # noqa: E402
+from aritiq.edgar.xbrl import extract_xbrl_facts  # noqa: E402
+
+sys.path.insert(0, HERE)
+from xbrl_verify import build_claims_from_facts  # noqa: E402  (sibling module)
 
 CACHE = os.path.join(HERE, "cache")
 FILINGS_DIR = os.path.join(CACHE, "filings")
@@ -229,12 +233,96 @@ _EVIDENCE_FLAGS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# XBRL adjudication backstop (the Phase-1 "diff extracted vs XBRL ground truth").
+# ---------------------------------------------------------------------------
+# A prose WRONG_MATH conviction is the worst-case failure, so before recording one
+# we cross-check it against the SEC's own standardized XBRL facts — an INDEPENDENT,
+# deterministic grounding (no LLM). If an XBRL-grounded version of the SAME rule (the
+# correctly-scoped numerator / weighted-average shares / total-equity-incl-NCI /
+# mezzanine-aware operands) reconciles the figure, the prose conviction was a
+# wrong-operand-SCOPE artifact, not a real arithmetic error — so we downgrade it to
+# INSUFFICIENT_EVIDENCE (prose scope unconfirmed; XBRL reconciles). If XBRL INDEPEND-
+# ENTLY also convicts, the discrepancy is real and the WRONG_MATH stands. This never
+# manufactures a VERIFIED and never hides a genuine error; it only refuses to convict
+# where an independent grounding disagrees. Requires cached XBRL facts; absent them,
+# the prose verdict is left untouched (honest).
+_XBRL_FACTS_CACHE: Dict[str, object] = {}
+
+
+def _xbrl_facts_for(ticker: str):
+    if ticker not in _XBRL_FACTS_CACHE:
+        try:
+            _XBRL_FACTS_CACHE[ticker] = extract_xbrl_facts(ticker, use_cache=True)
+        except Exception:
+            _XBRL_FACTS_CACHE[ticker] = None
+    return _XBRL_FACTS_CACHE[ticker]
+
+
+def xbrl_adjudicate(ticker: str, claim: Claim, prose_status: VerificationStatus):
+    """Return (final_status, note) after cross-checking a prose WRONG_MATH with XBRL.
+
+    Only acts on internal_consistency WRONG_MATH convictions; every other verdict is
+    returned unchanged. Deterministic and firewall-safe (XBRL is plain SEC JSON, no
+    model)."""
+    if prose_status != VerificationStatus.WRONG_MATH:
+        return prose_status, None
+    if claim.operation != Operation.INTERNAL_CONSISTENCY or not claim.rule_name:
+        return prose_status, None
+    facts = _xbrl_facts_for(ticker)
+    if facts is None or getattr(facts, "fetch_error", None):
+        return prose_status, None
+    try:
+        xclaims = build_claims_from_facts(facts)
+    except Exception:
+        return prose_status, None
+
+    # Find the XBRL claim for the same rule (+ EPS variant).
+    want_variant = claim.eps_variant
+    match = None
+    for xc in xclaims:
+        if xc.rule_name != claim.rule_name:
+            continue
+        if claim.rule_name == "eps_reconciliation" and want_variant is not None:
+            if xc.eps_variant != want_variant:
+                continue
+        match = xc
+        break
+    if match is None:
+        # XBRL cannot supply the correctly-scoped operands for this rule → we cannot
+        # clear the conviction, but we also cannot confirm it independently. The
+        # honest verdict is to DECLINE rather than convict on prose alone.
+        return (VerificationStatus.INSUFFICIENT_EVIDENCE,
+                "prose WRONG_MATH not independently confirmable: SEC XBRL does not tag "
+                "the correctly-scoped operand for this rule; declining to convict on "
+                "prose grounding alone.")
+
+    xres = verify_claim(match)
+    xops = [o.value for o in match.operands]
+    if xres.status == VerificationStatus.VERIFIED:
+        return (VerificationStatus.INSUFFICIENT_EVIDENCE,
+                f"prose WRONG_MATH downgraded: prose operand scope unconfirmed, but "
+                f"XBRL-grounded operands {xops} reconcile this figure (VERIFIED). The "
+                f"prose extractor grounded a wrong-scope operand (e.g. total vs "
+                f"income-to-common, period-end vs weighted-average shares).")
+    if xres.status == VerificationStatus.INSUFFICIENT_EVIDENCE:
+        return (VerificationStatus.INSUFFICIENT_EVIDENCE,
+                f"prose WRONG_MATH downgraded: XBRL grounding also declines "
+                f"(completeness/scope gate) rather than convicting — {xres.explanation[:120]}")
+    # XBRL independently convicts too → the discrepancy is real.
+    return (VerificationStatus.WRONG_MATH,
+            f"prose WRONG_MATH upheld: independent XBRL grounding {xops} also fails the "
+            f"reconciliation — a real arithmetic discrepancy, not a scope artifact.")
+
+
 @dataclass
 class ClaimRecord:
     ticker: str
     rule_name: Optional[str]
     operation: str
     verdict: str
+    prose_verdict: str
+    adjudication: Optional[str]
     operand_values: List[Optional[float]]
     # evidence-flag emission, per the gate the rule uses:
     evidence_flags_required: List[str]
@@ -258,6 +346,8 @@ def _flag_value(params: dict, key: str):
 
 def record_claim(ticker: str, claim: Claim) -> ClaimRecord:
     res = verify_claim(claim)
+    prose_status = res.status
+    final_status, adjudication = xbrl_adjudicate(ticker, claim, prose_status)
     params = claim.params or {}
     rule = claim.rule_name
     required = _EVIDENCE_FLAGS.get(rule or "", [])
@@ -307,7 +397,9 @@ def record_claim(ticker: str, claim: Claim) -> ClaimRecord:
         ticker=ticker,
         rule_name=rule,
         operation=claim.operation.value,
-        verdict=res.status.value,
+        verdict=final_status.value,
+        prose_verdict=prose_status.value,
+        adjudication=adjudication,
         operand_values=[o.value for o in claim.operands],
         evidence_flags_required=required,
         evidence_flags_emitted=emitted,
@@ -319,7 +411,8 @@ def record_claim(ticker: str, claim: Claim) -> ClaimRecord:
         node_id=claim.node_id,
         depends_on=list(claim.depends_on or []),
         has_graph_dep=bool(claim.depends_on),
-        explanation=res.explanation,
+        explanation=(res.explanation + (f"  |  [XBRL adjudication] {adjudication}"
+                                        if adjudication else "")),
     )
 
 

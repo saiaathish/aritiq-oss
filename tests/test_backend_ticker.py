@@ -40,11 +40,18 @@ def _bs_audit(source, summary, **kw):
     return real_audit(source, summary, complete_fn=lambda s, u: "[]", cs_complete_fn=cs)
 
 
+# Endpoints require auth (anonymous access was removed); use a legacy test key.
+_AUTH = {"X-API-Key": "test-secret"}
+
+
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     # A live key must appear present so the endpoint proceeds past the 503 guard.
     monkeypatch.setenv("ARITIQ_PROVIDER", "gemini")
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("ARITIQ_API_KEYS", "test-secret")
+    monkeypatch.setenv("ARITIQ_ENTERPRISE_DB", str(tmp_path / "enterprise.sqlite"))
+    app_mod._RATE_BUCKETS.clear()
     return TestClient(app_mod.app)
 
 
@@ -52,7 +59,7 @@ def test_ticker_audit_returns_filing_block(client, monkeypatch):
     monkeypatch.setattr(app_mod, "fetch_10k_text", lambda t: (_FILING, _SOURCE))
     monkeypatch.setattr(app_mod, "run_audit", _bs_audit)
 
-    r = client.post("/audit-ticker", json={"ticker": "AAPL"})
+    r = client.post("/audit-ticker", headers=_AUTH, json={"ticker": "AAPL"})
     assert r.status_code == 200, r.text
     data = r.json()
 
@@ -71,7 +78,7 @@ def test_unknown_ticker_is_404(client, monkeypatch):
     def boom(t):
         raise UnknownTickerError("Ticker ZZZZ was not found in SEC's EDGAR database.")
     monkeypatch.setattr(app_mod, "fetch_10k_text", boom)
-    r = client.post("/audit-ticker", json={"ticker": "ZZZZ"})
+    r = client.post("/audit-ticker", headers=_AUTH, json={"ticker": "ZZZZ"})
     assert r.status_code == 404
     assert "not found" in r.json()["detail"].lower()
 
@@ -80,25 +87,28 @@ def test_no_10k_is_404(client, monkeypatch):
     def boom(t):
         raise NoFilingError("Foreign Co has no 10-K on file.")
     monkeypatch.setattr(app_mod, "fetch_10k_text", boom)
-    r = client.post("/audit-ticker", json={"ticker": "FORGN"})
+    r = client.post("/audit-ticker", headers=_AUTH, json={"ticker": "FORGN"})
     assert r.status_code == 404
 
 
 def test_empty_ticker_is_400(client):
-    r = client.post("/audit-ticker", json={"ticker": "   "})
+    r = client.post("/audit-ticker", headers=_AUTH, json={"ticker": "   "})
     assert r.status_code == 400
 
 
-def test_missing_key_is_503(monkeypatch):
+def test_missing_key_is_503(monkeypatch, tmp_path):
     # No key configured: the fetch succeeds but the audit can't run.
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setenv("ARITIQ_PROVIDER", "anthropic")
+    monkeypatch.setenv("ARITIQ_API_KEYS", "test-secret")
+    monkeypatch.setenv("ARITIQ_ENTERPRISE_DB", str(tmp_path / "enterprise.sqlite"))
     monkeypatch.setattr(app_mod, "fetch_10k_text", lambda t: (_FILING, _SOURCE))
+    app_mod._RATE_BUCKETS.clear()
     client = TestClient(app_mod.app)
-    r = client.post("/audit-ticker", json={"ticker": "AAPL"})
+    r = client.post("/audit-ticker", headers=_AUTH, json={"ticker": "AAPL"})
     assert r.status_code == 503
     # The message should confirm the fetch worked even though the audit couldn't.
     assert "EDGAR" in r.json()["detail"] or "key" in r.json()["detail"].lower()

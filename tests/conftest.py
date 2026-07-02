@@ -33,6 +33,19 @@ def _missing(tickers):
             if not os.path.exists(os.path.join(_XBRL_CACHE, f"_raw_{t}.json"))]
 
 
+@pytest.fixture(autouse=True)
+def _isolate_enterprise_db(tmp_path, monkeypatch):
+    """Point the enterprise/identity SQLite DB at a per-test tmp file.
+
+    Tests must never touch a shared on-disk DB: doing so lets parallel test
+    files (and parallel sessions) collide on one file, producing spurious
+    auth/rate-limit failures and leftover ``*-journal`` files. This autouse
+    fixture isolates every test automatically so no individual test file has to
+    remember to do it.
+    """
+    monkeypatch.setenv("ARITIQ_ENTERPRISE_DB", str(tmp_path / "enterprise.sqlite"))
+
+
 def pytest_collection_modifyitems(config, items):
     for item in items:
         need = _CACHE_DEPENDENT.get(item.name)

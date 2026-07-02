@@ -161,28 +161,39 @@ class TestUPREITMezzanineNCI:
 
 
 class TestSORoundingBoundary:
-    """SO (Southern Company) diluted EPS — a documented tolerance-boundary case.
+    """SO (Southern Company) diluted EPS — the per-share rounding-tolerance fix.
 
     The filer publishes net income and shares rounded to whole millions and EPS to
     two decimals: 4,341 / 1,109 = 3.9143, which the filer's precise internal figures
-    round to 3.92. The grounded operands genuinely don't reproduce 3.92 within the
-    half-cent EPS tolerance, so a WRONG_MATH here is CORRECT given the operands —
-    we do NOT widen tolerance to force it (that would weaken the gate). Documented
-    as a known rounding-boundary case, not a fixable extraction bug.
+    round to 3.92. The 0.0057 gap is FULLY EXPLAINED by the rounding of the published
+    operands propagated through the division (Phase-1 `eps_rounding_tolerance`), so
+    convicting it would be a false WRONG_MATH — exactly the over-conviction the Phase-1
+    adjudication flagged for SO. The verifier now VERIFIES it, because the discrepancy
+    is indistinguishable from input rounding, NOT because tolerance was blanket-widened:
+    a genuine multi-cent error still convicts (see test_genuine_eps_error_still_convicts).
     """
 
-    def test_so_diluted_rounding_boundary_is_wrong_math(self):
-        # Confirms the gate is NOT loosened: the published operands really are
-        # ~0.003 outside the tolerance, so the verifier honestly convicts.
+    def test_so_diluted_within_published_rounding_band_verifies(self):
+        # 4,341 / 1,109 = 3.9143; published 3.92. The gap (0.0057) is inside the
+        # rounding band implied by operands rounded to whole millions -> VERIFIED.
         r = check_eps_reconciliation([3.92, 4341.0, 1109.0],
                                      eps_income_basis="total", income_operand_basis="total")
-        assert r.status == VerificationStatus.WRONG_MATH
+        assert r.status == VerificationStatus.VERIFIED
 
     def test_so_basic_verifies(self):
         # SO basic: 4,341 / 1,103 = 3.9347 ≈ 3.94 -> VERIFIED (within tolerance).
         r = check_eps_reconciliation([3.94, 4341.0, 1103.0],
                                      eps_income_basis="total", income_operand_basis="total")
         assert r.status == VerificationStatus.VERIFIED
+
+    def test_genuine_eps_error_still_convicts(self):
+        # NON-WEAKENING GUARD: a real multi-cent discrepancy (published 3.99 vs
+        # 4,341 / 1,109 = 3.9143, a ~7.6-cent gap) is far beyond any input-rounding
+        # band and MUST still convict. Proves the rounding tolerance only forgives
+        # sub-rounding gaps, never a genuine arithmetic error.
+        r = check_eps_reconciliation([3.99, 4341.0, 1109.0],
+                                     eps_income_basis="total", income_operand_basis="total")
+        assert r.status == VerificationStatus.WRONG_MATH
 
 
 class TestPriorGatesIntact:

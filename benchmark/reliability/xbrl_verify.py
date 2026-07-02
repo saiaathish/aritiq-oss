@@ -71,11 +71,23 @@ def build_claims_from_facts(f: XbrlFacts) -> List[Claim]:
     if f.assets is not None and f.liabilities is not None and f.equity is not None:
         eq_note = ("StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest"
                    if f.equity_includes_nci else "StockholdersEquity")
+        # Mezzanine completeness: if the filer tags a redeemable/temporary-equity
+        # block that plausibly accounts for a two-term shortfall (Assets exceed
+        # Liabilities + Equity by roughly the temporary-equity amount), flag it so
+        # the completeness gate declines rather than convicts. Deterministic: we
+        # compare the disclosed temp-equity fact to the actual gap; we never add it
+        # into the identity (that would beg the question of where mezzanine belongs).
+        redeemable_present = False
+        if f.temp_equity:
+            gap = f.assets - (f.liabilities + f.equity)
+            if gap > 0 and abs(gap - f.temp_equity) <= 0.10 * abs(f.temp_equity):
+                redeemable_present = True
         claims.append(Claim(
             claim_text=f"[XBRL] {f.ticker} balance sheet identity",
             operation=Operation.INTERNAL_CONSISTENCY, stated_value=None,
             rule_name="balance_sheet_identity",
-            params={"liabilities_complete": True},   # definitive: literal Liabilities tag
+            params={"liabilities_complete": True,   # definitive: literal Liabilities tag
+                    "redeemable_equity_present": redeemable_present},
             operands=[
                 _op(f.assets, "total_assets", f"XBRL Assets"),
                 _op(f.liabilities, "total_liabilities", f"XBRL Liabilities"),
@@ -97,6 +109,18 @@ def build_claims_from_facts(f: XbrlFacts) -> List[Claim]:
         ("basic", f.eps_basic, f.shares_basic, "Basic"),
         ("diluted", f.eps_diluted, f.shares_diluted, "Diluted"),
     ):
+        # SCOPE GUARD (UPREIT / two-class diluted numerator). The only machine-readable
+        # income-to-common tag is `...AvailableToCommonStockholdersBasic` — a BASIC-scope
+        # numerator. For filers with a redeemable-NCI / operating-partnership structure
+        # (equity_includes_nci and a preferred/participating numerator), diluted EPS is
+        # computed on a DIFFERENT numerator (OP-unit income added back), which is not
+        # separately tagged. Pairing the basic numerator with diluted shares is a scope
+        # mismatch, so we DECLINE to emit the diluted claim rather than convict on it
+        # (the Welltower diluted case). Basic still verifies; total-net-income filers
+        # (no preferred) are unaffected.
+        if (variant == "diluted" and num_basis == "common"
+                and f.equity_includes_nci and f.shares_diluted != f.shares_basic):
+            continue
         if eps is not None and numerator is not None and shares is not None and shares != 0:
             claims.append(Claim(
                 claim_text=f"[XBRL] {f.ticker} {variant} EPS reconciliation",

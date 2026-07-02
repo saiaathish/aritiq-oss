@@ -3,7 +3,7 @@
 - **Mode:** `replay`
 - **Filings:** 83 (83 with extraction)
 - **In-scope claims:** 238
-- **Run:** 2026-07-01T09:36:57Z → 2026-07-01T09:36:58Z
+- **Run:** 2026-07-01T14:20:50Z → 2026-07-01T14:20:51Z
 
 > Counts are observations from this run. No real-filing accuracy is claimed; FP/FN adjudication requires the human review CSV.
 
@@ -11,10 +11,9 @@
 
 | Verdict | Count |
 |---|---|
-| VERIFIED | 158 |
-| INSUFFICIENT_EVIDENCE | 64 |
+| VERIFIED | 159 |
+| INSUFFICIENT_EVIDENCE | 70 |
 | UNSUPPORTED_NUMBER | 9 |
-| WRONG_MATH | 7 |
 
 ## Evidence-flag emission by rule
 
@@ -32,8 +31,8 @@ Share of in-scope claims by verdict, aggregated across all sectors. Aggregation 
 
 | Statement type | N | % verified | % insufficient-evidence | % extraction-miss | WRONG_MATH |
 |---|---|---|---|---|---|
-| eps_reconciliation | 85 | 68.2% | 15.3% | 9.4% | 6 |
-| balance_sheet_identity | 81 | 90.1% | 7.4% | 1.2% | 1 |
+| eps_reconciliation | 85 | 69.4% | 21.2% | 9.4% | 0 |
+| balance_sheet_identity | 81 | 90.1% | 8.6% | 1.2% | 0 |
 | cash_flow_tie_out | 72 | 37.5% | 62.5% | 0.0% | 0 |
 
 ## Breakdown by sector
@@ -43,8 +42,8 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 | Sector | N | % verified | % insufficient-evidence | % extraction-miss | WRONG_MATH |
 |---|---|---|---|---|---|
 | Software | 20 | 95.0% | 5.0% | 0.0% | 0 |
-| Insurance | 17 | 76.5% | 11.8% | 5.9% | 1 |
-| Utility | 12 | 33.3% | 50.0% | 0.0% | 2 |
+| Insurance | 17 | 76.5% | 17.6% | 5.9% | 0 |
+| Utility | 12 | 33.3% | 66.7% | 0.0% | 0 |
 | Media | 11 | 90.9% | 9.1% | 0.0% | 0 |
 | REIT | 10 | 80.0% | 20.0% | 0.0% | 0 |
 | Semiconductors | 10 | 80.0% | 20.0% | 0.0% | 0 |
@@ -55,7 +54,7 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 | REIT (data center) | 6 | 50.0% | 50.0% | 0.0% | 0 |
 | Telecom | 6 | 50.0% | 50.0% | 0.0% | 0 |
 | Consumer Staples | 5 | 60.0% | 40.0% | 0.0% | 0 |
-| Industrials | 5 | 60.0% | 0.0% | 20.0% | 1 |
+| Industrials | 5 | 60.0% | 20.0% | 20.0% | 0 |
 | Pharma | 5 | 40.0% | 20.0% | 40.0% | 0 |
 | Retail (smaller) | 5 | 100.0% | 0.0% | 0.0% | 0 |
 | Aerospace (mid-cap) | 4 | 100.0% | 0.0% | 0.0% | 0 |
@@ -70,16 +69,16 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 | Automotive (smaller) | 3 | 33.3% | 66.7% | 0.0% | 0 |
 | Consumer (spinoff) | 3 | 100.0% | 0.0% | 0.0% | 0 |
 | Consumer Electronics | 3 | 33.3% | 66.7% | 0.0% | 0 |
-| E-commerce (smaller) | 3 | 33.3% | 33.3% | 0.0% | 1 |
+| E-commerce (smaller) | 3 | 66.7% | 33.3% | 0.0% | 0 |
 | E-commerce/Cloud | 3 | 66.7% | 33.3% | 0.0% | 0 |
 | Financial (brokerage) | 3 | 66.7% | 33.3% | 0.0% | 0 |
 | Fintech (mortgage) | 3 | 33.3% | 66.7% | 0.0% | 0 |
 | Healthcare | 3 | 100.0% | 0.0% | 0.0% | 0 |
-| Industrials (spinoff) | 3 | 33.3% | 33.3% | 0.0% | 1 |
+| Industrials (spinoff) | 3 | 33.3% | 66.7% | 0.0% | 0 |
 | Media/Streaming | 3 | 66.7% | 33.3% | 0.0% | 0 |
 | Networking | 3 | 66.7% | 33.3% | 0.0% | 0 |
 | REIT (gaming) | 3 | 33.3% | 66.7% | 0.0% | 0 |
-| REIT (healthcare) | 3 | 33.3% | 33.3% | 0.0% | 1 |
+| REIT (healthcare) | 3 | 33.3% | 66.7% | 0.0% | 0 |
 | REIT (office) | 3 | 66.7% | 33.3% | 0.0% | 0 |
 | REIT (residential) | 3 | 33.3% | 66.7% | 0.0% | 0 |
 | REIT (towers) | 3 | 66.7% | 33.3% | 0.0% | 0 |
@@ -94,10 +93,9 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 
 | Count | Bucket | Owner |
 |---|---|---|
-| 158 | `auto:true_positive_candidate` | —(verified) |
-| 64 | `verifier_gate_fired:by_design` | verifier(by_design) |
+| 159 | `auto:true_positive_candidate` | —(verified) |
+| 70 | `verifier_gate_fired:by_design` | verifier(by_design) |
 | 9 | `extraction_failure:missing_operand` | extraction |
-| 7 | `auto:NEEDS_REVIEW_HIGH(conviction)` | —(needs_human) |
 
 ## Per-filing
 
@@ -141,11 +139,11 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 | AMT | AMERICAN TOWER CORP /MA/ | replay-cache | 1 | VERIFIED=1 |
 | SPG | SIMON PROPERTY GROUP INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 |
 | O | REALTY INCOME CORP | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 |
-| NEE | NEXTERA ENERGY INC | replay-cache | 4 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 WRONG_MATH=1 |
+| NEE | NEXTERA ENERGY INC | replay-cache | 4 | INSUFFICIENT_EVIDENCE=2 VERIFIED=2 |
 | DUK | Duke Energy CORP | replay-cache | 2 | INSUFFICIENT_EVIDENCE=1 VERIFIED=1 |
-| SO | SOUTHERN CO | replay-cache | 6 | INSUFFICIENT_EVIDENCE=4 VERIFIED=1 WRONG_MATH=1 |
+| SO | SOUTHERN CO | replay-cache | 6 | INSUFFICIENT_EVIDENCE=5 VERIFIED=1 |
 | CAT | CATERPILLAR INC | replay-cache | 0 |  |
-| HON | HONEYWELL INTERNATIONAL INC | replay-cache | 3 | VERIFIED=2 WRONG_MATH=1 |
+| HON | HONEYWELL INTERNATIONAL INC | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 |
 | RTX | RTX Corp | replay-cache | 4 | INSUFFICIENT_EVIDENCE=1 VERIFIED=3 |
 | F | FORD MOTOR CO | replay-cache | 2 | INSUFFICIENT_EVIDENCE=1 VERIFIED=1 |
 | ETSY | ETSY INC | replay-cache | 4 | INSUFFICIENT_EVIDENCE=1 VERIFIED=3 |
@@ -156,11 +154,11 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 | EQIX | EQUINIX INC | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
 | DLR | DIGITAL REALTY TRUST, INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 |
 | VICI | VICI PROPERTIES INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
-| WELL | WELLTOWER INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=1 WRONG_MATH=1 |
+| WELL | WELLTOWER INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
 | AVB | AVALONBAY COMMUNITIES INC | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
 | BXP | BXP, Inc. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 |
 | CCI | CROWN CASTLE INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 |
-| TRV | TRAVELERS COMPANIES, INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=1 WRONG_MATH=1 |
+| TRV | TRAVELERS COMPANIES, INC. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
 | ALL | ALLSTATE CORP | replay-cache | 4 | VERIFIED=4 |
 | PRU | PRUDENTIAL FINANCIAL INC | replay-cache | 2 | INSUFFICIENT_EVIDENCE=1 UNSUPPORTED_NUMBER=1 |
 | AFL | AFLAC INC | replay-cache | 2 | VERIFIED=2 |
@@ -173,11 +171,11 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 | GEV | GE Vernova Inc. | replay-cache | 0 |  |
 | SOLV | Solventum Corp | replay-cache | 4 | VERIFIED=4 |
 | KVUE | Kenvue Inc. | replay-cache | 3 | VERIFIED=3 |
-| CARR | CARRIER GLOBAL Corp | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=1 WRONG_MATH=1 |
+| CARR | CARRIER GLOBAL Corp | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
 | FOXA | Fox Corp | replay-cache | 4 | VERIFIED=4 |
 | PSKY | Paramount Skydance Corp | replay-cache | 3 | VERIFIED=3 |
 | BBWI | Bath & Body Works, Inc. | replay-cache | 5 | VERIFIED=5 |
-| W | Wayfair Inc. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=1 WRONG_MATH=1 |
+| W | Wayfair Inc. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=1 VERIFIED=2 |
 | CVNA | CARVANA CO. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
 | AFRM | Affirm Holdings, Inc. | replay-cache | 4 | INSUFFICIENT_EVIDENCE=3 VERIFIED=1 |
 | RKT | Rocket Companies, Inc. | replay-cache | 3 | INSUFFICIENT_EVIDENCE=2 VERIFIED=1 |
@@ -189,5 +187,4 @@ Share of in-scope claims by verdict, grouped by the filer's sector. Aggregation 
 
 ## Prioritized fix list (pre-deployment)
 
-- [P1 review] 7 WRONG_MATH conviction(s). Manually confirm each is a real arithmetic disagreement with complete, correctly-scoped operands before shipping — a single false conviction is the worst-case failure.
 - [P3 extraction] No claims carried graph dependencies (depends_on). Cross-statement claims are leaf-level by nature, so this is expected here; revisit only when the summary-audit pass (derived figures) is added to this harness.

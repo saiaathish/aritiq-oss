@@ -1,9 +1,9 @@
 # Multi-period trend verification (XBRL-grounded)
 
-- Filers: 78 (78 with usable multi-year series)
-- Verdict totals: `{'VERIFIED': 403, 'WRONG_MATH': 379}`
-- Positive controls (real claims that must VERIFY): **468/468** (100.0%)
-- Negative controls (wrong claims that must be caught as WRONG_MATH): **314/314** (100.0%)
+- Filers: 83 (83 with usable multi-year series)
+- Verdict totals: `{'VERIFIED': 429, 'WRONG_MATH': 405}`
+- Positive controls (real claims that must VERIFY): **499/499** (100.0%)
+- Negative controls (wrong claims that must be caught as WRONG_MATH): **335/335** (100.0%)
 
 | Ticker | Series (concept: points, dropped) | Claims | pos | neg |
 |---|---|---|---|---|
@@ -85,3 +85,8 @@
 | CVNA | revenue: 9pt/16drop; net_income: 11pt/32drop | 10 | 6/6 | 4/4 |
 | AFRM | revenue: 7pt/0drop; net_income: 7pt/0drop | 12 | 7/7 | 5/5 |
 | RKT | revenue: 0pt/0drop; net_income: 8pt/8drop | 3 | 2/2 | 1/1 |
+| UNH | revenue: 19pt/32drop; net_income: 19pt/32drop | 10 | 6/6 | 4/4 |
+| HCA | revenue: 7pt/0drop; net_income: 17pt/72drop | 12 | 7/7 | 5/5 |
+| UNP | revenue: 7pt/0drop; net_income: 19pt/88drop | 10 | 6/6 | 4/4 |
+| DAL | revenue: 10pt/8drop; net_income: 17pt/72drop | 12 | 7/7 | 5/5 |
+| UPS | revenue: 10pt/24drop; net_income: 19pt/88drop | 8 | 5/5 | 3/3 |

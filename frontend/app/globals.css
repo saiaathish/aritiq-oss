@@ -17,67 +17,118 @@
     min-height: 100dvh;
   }
 
-  /* Tabular figures everywhere numbers matter — prevents layout shift */
   .tnum {
-    font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
+    font-variant-numeric: tabular-nums;
   }
 
   ::selection {
-    background: rgba(245, 165, 36, 0.25);
+    background: rgba(107, 180, 240, 0.25);
   }
 
-  /* Slim, on-theme scrollbars */
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
+
   ::-webkit-scrollbar-thumb {
-    background: #1e2a42;
-    border-radius: 9999px;
-    border: 2px solid transparent;
+    background: #1a2d4d;
     background-clip: content-box;
+    border: 2px solid transparent;
+    border-radius: 9999px;
   }
+
   ::-webkit-scrollbar-thumb:hover {
-    background: #2b3a59;
+    background: #243d5f;
     background-clip: content-box;
   }
 }
 
 @layer components {
-  /* Frosted-glass surface — the primary card treatment */
   .glass {
     background: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(255, 255, 255, 0.02) 100%
+      rgba(107, 180, 240, 0.06) 0%,
+      rgba(107, 180, 240, 0.02) 100%
     );
+    border: 1px solid rgba(107, 180, 240, 0.1);
+    box-shadow:
+      0 1px 0 0 rgba(107, 180, 240, 0.06) inset,
+      0 20px 50px -20px rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(16px) saturate(140%);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow:
-      0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
-      0 20px 50px -20px rgba(0, 0, 0, 0.6);
   }
 
   .glass-subtle {
-    background: rgba(255, 255, 255, 0.025);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(107, 180, 240, 0.03);
+    border: 1px solid rgba(107, 180, 240, 0.08);
   }
 
-  /* Ambient light blobs behind everything (atmospheric depth) */
   .ambient-blob {
     position: fixed;
+    z-index: 0;
     border-radius: 9999px;
     filter: blur(90px);
     opacity: 0.22;
     pointer-events: none;
-    z-index: 0;
     will-change: transform;
   }
 }
 
-/* Respect reduced-motion: kill ambient drift and long transitions */
+@keyframes aritiq-falling-lines {
+  from {
+    background-position:
+      0 0,
+      80px -120px,
+      160px -260px;
+  }
+  to {
+    background-position:
+      0 720px,
+      80px 600px,
+      160px 460px;
+  }
+}
+
+.case-study-falling-lines {
+  background-image:
+    radial-gradient(2px 72px at 12px 0, rgba(107, 180, 240, 0.42), transparent 76%),
+    radial-gradient(1px 52px at 92px 0, rgba(107, 180, 240, 0.28), transparent 76%),
+    radial-gradient(1px 38px at 172px 0, rgba(107, 180, 240, 0.22), transparent 76%);
+  background-size: 220px 360px;
+  animation: aritiq-falling-lines 18s linear infinite;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-display,
+.font-serif,
+.text-2xl,
+.text-3xl,
+.text-4xl,
+.text-5xl,
+.text-6xl,
+.text-7xl,
+.text-8xl,
+.text-\[2rem\],
+.text-\[4\.75rem\],
+.text-\[5\.25rem\] {
+  font-family: Didot, "Didot LT STD", "Hoefler Text", Garamond, "Times New Roman", serif !important;
+}
+
+code,
+pre,
+.font-mono,
+.tnum,
+code *,
+pre * {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -86,7 +137,9 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
-  .ambient-blob {
+
+  .ambient-blob,
+  .case-study-falling-lines {
     animation: none !important;
   }
 }

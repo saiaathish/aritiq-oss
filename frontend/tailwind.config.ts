@@ -18,9 +18,9 @@ const config: Config = {
         muted: "#8A98B2",
         border: "#1E2A42",
 
-        // Brand: gold = trust, purple = tech (used sparingly as accent)
-        primary: { DEFAULT: "#F5A524", foreground: "#0A0E1A" },
-        accent: { DEFAULT: "#8B5CF6", foreground: "#0A0E1A" },
+        // Brand: Aritiq blue palette
+        primary: { DEFAULT: "#6BB4F0", foreground: "#0A0E1A" },
+        accent: { DEFAULT: "#3B82F6", foreground: "#0A0E1A" },
 
         // Semantic status colors (mapped to the verifier's taxonomy)
         verified: "#34D399",

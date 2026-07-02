@@ -119,11 +119,21 @@ Each element is an object with exactly these keys:
   "node_id"      (string or null)  stable id for this claim's output number when another claim uses it
   "depends_on"  (array of strings) node_ids this claim depends on; [] otherwise
 
-PROVENANCE GRAPH: only set "depends_on" when a summary claim's operand is the
-stated output of another extracted claim, not merely the same raw source number.
-Example: if claim A states revenue and claim B computes margin using that
-stated revenue output, B depends_on A. If unsure, leave depends_on [] rather
-than guessing an edge.
+PROVENANCE GRAPH (depends_on). Set "depends_on" ONLY for an output->input link: one
+claim's operand is the COMPUTED OUTPUT of another claim you extracted. Give the source
+claim a short "node_id" and list that id in the consuming claim's "depends_on".
+  - LINK when a claim reuses a figure that ANOTHER claim computed. Example: claim S
+    computes a subtotal ("Sales + Support = $20M", node_id "combined") and claim T then
+    uses that $20M as an input ("Total was $50M" = Marketing $30M + the $20M combined).
+    T depends_on ["combined"], because its $20M operand is S's output — a number that
+    only exists because S computed it (it is not printed on its own in the source).
+  - DO NOT LINK claims that merely share the SAME RAW SOURCE NUMBER. If revenue is
+    reported as $1,200M and three separate claims each divide by that reported $1,200M
+    (growth, net margin, R&D %), they share a raw input — none is the output of another,
+    so every depends_on stays []. A value that appears verbatim in the source is a raw
+    figure, not a computed output.
+  - If unsure, leave depends_on [] and node_id null. A missing edge is safe; a wrong
+    edge falsely blames one claim for another's error.
 
 If the summary contains no numeric claims, return []."""
 
@@ -181,6 +191,43 @@ Correct output:
    "unit": null,
    "source_text": "Total customers: 980",
    "notes": "Summary states 1020; source says 980. Stated_value taken from summary."}
+]
+
+EXAMPLE 2 (depends_on — an output->input chain vs a shared raw input)
+Source document:
+  "Sales: $12M. Support: $8M. Marketing: $30M. Revenue: $200M."
+Summary:
+  "Combined Sales and Support was $20M. Total across the three functions was $50M.
+   Marketing was 15% of revenue."
+Correct output:
+[
+  {"claim_text": "Combined Sales and Support was $20M",
+   "operation": "sum", "stated_value": 20,
+   "operands": [
+     {"value": 12, "source": "grounded", "source_text": "Sales: $12M"},
+     {"value": 8, "source": "grounded", "source_text": "Support: $8M"}
+   ],
+   "unit": "$M", "source_text": "Sales: $12M. Support: $8M.", "notes": null,
+   "node_id": "combined_ss", "depends_on": []},
+  {"claim_text": "Total across the three functions was $50M",
+   "operation": "sum", "stated_value": 50,
+   "operands": [
+     {"value": 30, "source": "grounded", "source_text": "Marketing: $30M"},
+     {"value": 20, "source": "inferred", "source_text": "Combined Sales and Support was $20M",
+      "notes": "the $20M combined subtotal computed above"}
+   ],
+   "unit": "$M", "source_text": "Total across the three functions was $50M",
+   "notes": "uses the $20M combined subtotal as an input",
+   "node_id": "total_opex", "depends_on": ["combined_ss"]},
+  {"claim_text": "Marketing was 15% of revenue",
+   "operation": "margin_percent", "stated_value": 15,
+   "operands": [
+     {"value": 30, "source": "grounded", "source_text": "Marketing: $30M"},
+     {"value": 200, "source": "grounded", "source_text": "Revenue: $200M"}
+   ],
+   "unit": "%", "source_text": "Marketing: $30M ... Revenue: $200M",
+   "notes": "revenue $200M is a RAW source figure, not a computed output -> depends_on []",
+   "node_id": null, "depends_on": []}
 ]"""
 
 

@@ -40,14 +40,15 @@ export interface Operand {
 }
 
 export interface Claim {
-  claim_text: string;
-  operation: string;
-  stated_value: number | null;
-  operands: Operand[];
-  unit: string | null;
-  // ---- Phase 2 optional fields ----
-  rule_name?: string | null; // e.g. "balance_sheet_identity"
-  eps_variant?: "basic" | "diluted" | null;
+claim_text: string;
+operation: string;
+stated_value: number | null;
+operands: Operand[];
+unit: string | null;
+source_text?: string | null;
+// ---- Phase 2 optional fields ----
+rule_name?: string | null; // e.g. "balance_sheet_identity"
+eps_variant?: "basic" | "diluted" | null;
   // ---- Phase 3 optional fields ----
   node_id?: string | null;
   depends_on?: string[];
@@ -119,4 +120,52 @@ export interface DocumentInput {
   text: string;
   period?: string | null;
   doc_type?: string | null;
+}
+
+// ---- Phase 3 item 1: SEC filing timeline ----
+// The coverage label states what Aritiq ACTUALLY verifies for the filing type.
+// It travels with every event so the UI can never imply coverage that doesn't exist.
+export type VerificationCoverage =
+  | "full_financial_verification" // 10-K / 10-Q — measured
+  | "partial_financial_verification" // 8-K with Item 2.02 earnings exhibit
+  | "ownership_data_only" // Form 4 — parsed, not financially verified
+  | "listed_only"; // dated entry + EDGAR link, no verification
+
+export interface TimelineEvent {
+  form: string;
+  filing_date: string;
+  report_date: string;
+  accession: string;
+  items: string;
+  verification_coverage: VerificationCoverage;
+  document_url: string | null;
+  description: string;
+}
+
+export interface CompanyTimeline {
+  ticker: string;
+  cik: number | null;
+  name: string;
+  has_older_filings: boolean;
+  coverage_legend: Record<VerificationCoverage, string>;
+  events: TimelineEvent[];
+}
+
+// ---- Phase 3 item 2: institutional risk dashboard ----
+// A panel with nothing to measure reports state "unassessed"/"no_data" with a
+// null value — the UI must render the state, never invent a clean number.
+export interface DashboardPanel {
+  key: string;
+  title: string;
+  basis: "deterministic" | "model_assisted";
+  state: "ok" | "unassessed" | "no_data";
+  value: number | null;
+  detail: string;
+  components: Record<string, unknown>;
+}
+
+export interface RiskDashboard {
+  ticker: string;
+  panels: DashboardPanel[];
+  boundary: string;
 }

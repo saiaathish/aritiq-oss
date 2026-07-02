@@ -230,6 +230,28 @@ _NCI_RE = re.compile(
 )
 
 
+# Mezzanine / TEMPORARY equity: redeemable noncontrolling interests, redeemable
+# operating-partnership units (UPREITs), or any line the filer parks in temporary
+# equity between liabilities and permanent equity. Distinct from _NCI_RE: this is
+# specifically the REDEEMABLE/temporary block that is outside BOTH the Liabilities
+# and StockholdersEquity tags, so the two-term identity legitimately falls short.
+_REDEEMABLE_EQUITY_RE = re.compile(
+    r"(redeemable\s+noncontrolling\s+interest"
+    r"|redeemable\s+operating\s+partnership"
+    r"|redeemable\s+(?:limited\s+)?partnership\s+units?"
+    r"|temporary\s+equity"
+    r"|mezzanine\s+equity"
+    r"|redeemable\s+\w*\s*units?)",
+    re.IGNORECASE,
+)
+
+
+def _context_names_redeemable_equity(claim: Claim) -> bool:
+    """True when grounded context names a redeemable/temporary (mezzanine) equity
+    line (Welltower / UPREIT). Pure string matching over source text."""
+    return bool(_REDEEMABLE_EQUITY_RE.search(_claim_context(claim)))
+
+
 def _claim_context(claim: Claim) -> str:
     """Concatenate all grounded text on a claim (claim/source/notes + operands)."""
     parts = [claim.claim_text, claim.source_text, claim.notes]
@@ -303,6 +325,16 @@ def _internal_consistency_evidence(claim: Claim) -> dict:
         # tolerance, to downgrade a likely wrong-line-item (parent-only equity)
         # conviction to INSUFFICIENT_EVIDENCE. Evidence-required, never blanket.
         ev["nci_in_context"] = _context_names_nci(claim)
+        # Mezzanine / temporary-equity completeness (the Welltower / UPREIT fix):
+        # a disclosed REDEEMABLE noncontrolling-interest / temporary-equity line
+        # sits outside both the liabilities and the equity operand. Set from the
+        # extractor's explicit flag (e.g. the filer's XBRL Redeemable.../Temporary...
+        # tag) or from redeemable/mezzanine language in the grounded context. The
+        # rule consults it ONLY on a failing tie-out, to decline rather than convict.
+        ev["redeemable_equity_present"] = (
+            bool(p.get("redeemable_equity_present"))
+            or _context_names_redeemable_equity(claim)
+        )
 
     elif claim.rule_name == "eps_reconciliation":
         ev["eps_income_basis"] = p.get("eps_income_basis")

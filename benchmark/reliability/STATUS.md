@@ -4,6 +4,465 @@ This file states, item by item, what is closed with evidence and what is **not y
 complete**. Nothing here claims real-world accuracy, readiness, or "done" beyond
 what the numbers below support.
 
+---
+
+# Phase 4 — enterprise features
+
+Written 2026-07-02. Closes roadmap Phase 4 within deliberately narrow scope: small-team workspace identity, audit history, watchlists, API-key dashboard, and webhook delivery plumbing. No OAuth providers, billing/subscriptions, mobile app, or full RBAC.
+
+## What was built
+
+`aritiq/enterprise.py` adds a SQLite-backed enterprise layer outside `aritiq/core/`: orgs, users, per-org API keys, per-key usage events, persisted audit history, watchlists, webhooks, and webhook deliveries. It imports no model SDK and performs no verification.
+
+Backend API additions in `backend/app.py`:
+
+- `POST /enterprise/bootstrap` creates a minimal org/user plus initial API key.
+- `GET /enterprise/team` returns current org/users/auth context.
+- `GET/POST /enterprise/api-keys`, `POST /enterprise/api-keys/{id}/rotate`, `POST /enterprise/api-keys/{id}/deactivate` provide the API-key dashboard surface: usage, limits, rotation, status/history.
+- `GET /enterprise/audits`, `GET /enterprise/audits/{id}` list/reopen persisted completed audits. `/audit` and `/audit-ticker` now store successful audit payloads per org.
+- `GET/POST /enterprise/watchlists`, `POST /enterprise/watchlists/check` store watched tickers and reuse Phase 3 `get_timeline()` as the only filing detector. No separate filing-detection system was invented.
+- `GET/POST /enterprise/webhooks`, `POST /enterprise/webhooks/dispatch` store generic webhook targets and dispatch queued filing events with retry/backoff.
+
+Auth/rate limiting changed explicitly: existing `ARITIQ_API_KEYS` still works as legacy shared-key mode, but enterprise keys are now first-class. If an enterprise key authenticates, rate limiting uses `key:{api_key_id}` and that key's `limit_per_minute`; IP fallback remains only for local/dev unauthenticated mode. Invalid supplied keys no longer fall back to default workspace.
+
+## Measured result (reproducible)
+
+`python benchmark/reliability/enterprise_phase4.py --md benchmark/reliability/ENTERPRISE_PHASE4_REPORT.md`
+
+Deterministic local SQLite run, no model calls and no SEC network:
+
+- `workspace_created`: true
+- `users`: 1
+- `api_keys_total`: 3 (initial disabled by rotation, secondary, rotated replacement)
+- `rotated_old_key_rejected`: true
+- `new_rotated_key_accepted`: true
+- `usage_calls_recorded`: 1
+- `audit_history_count`: 1
+- `audit_detail_reopens`: true
+- `watchlist_count`: 1
+- `webhook_count`: 1
+- `webhooks_queued`: 1
+- first webhook dispatch: `{"delivered": 0, "failed_or_retrying": 1}`
+- second dispatch after retry due: `{"delivered": 1, "failed_or_retrying": 0}`
+
+Tests: `tests/test_enterprise_phase4.py` adds 5 deterministic cases covering team/API-key dashboard/per-key limit, rotation rejecting old key, replay audit persistence/list/detail reopen, watchlist timeline reuse + webhook queueing, and webhook retry→success. Targeted backend regression set passed: **17 passed, 1 warning** (`tests/test_backend_timeline.py`, `tests/test_backend_dashboard.py`, `tests/test_backend_analyst.py`, `tests/test_backend_graph_serialization.py`, `tests/test_backend_phase_demos.py`, `tests/test_enterprise_phase4.py`). Full suite passed: **515 passed, 2 skipped, 1 warning**.
+
+## Honest boundary
+
+- This is a minimal identity/org model, not full RBAC. Every user in an org effectively shares the workspace.
+- Bootstrap is a local/team bootstrap primitive, not a production sign-up/auth provider flow. Google/Microsoft OAuth remain explicitly out of scope.
+- Audit history persists completed payloads exactly as produced; it does not add new verification or re-run old audits.
+- Watchlists detect "new filing" by comparing the latest accession returned by Phase 3 timeline. They do not poll SEC continuously by themselves; a caller/scheduler must invoke `/enterprise/watchlists/check`.
+- Webhooks are generic HTTP POST targets. Slack/email-specific providers are not built; retry/backoff is local durable delivery state, not a managed queue.
+
+## Reproduce
+
+```bash
+python benchmark/reliability/enterprise_phase4.py --md benchmark/reliability/ENTERPRISE_PHASE4_REPORT.md
+pytest -q tests/test_enterprise_phase4.py
+pytest -q tests/test_backend_timeline.py tests/test_backend_dashboard.py tests/test_backend_analyst.py tests/test_backend_graph_serialization.py tests/test_backend_phase_demos.py tests/test_enterprise_phase4.py
+```
+
+---
+
+# Phase 5 — expanded evaluation suite (XBRL-grounded lane)
+
+Written 2026-07-02. Closes Phase 5 only for deterministic SEC-companyfacts/XBRL evaluation. No live prose-extraction expansion is claimed because this environment had no `ARITIQ_PROVIDER`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, or `GEMINI_API_KEY`; creating new LLM extraction caches for 32 brand-new filers was therefore impossible without fabricating results.
+
+## What was built
+
+`benchmark/reliability/filing_set.json` expanded from **83** to **115** US 10-K filers. Added names were selected from the actual `REPORT_LATEST.md` gaps, not ticker familiarity:
+
+- banks/brokers/custody/specialty credit: C, MS, USB, PNC, TFC, COF, NTRS, STT;
+- insurers/brokers/life/P&C: BRO, AON, AJG, HIG, CINF, LNC;
+- regulated utilities: AEP, EXC, SRE, XEL, PEG, ED;
+- REIT subtypes: EQR, PSA, WY, IRM, ESS, MAA;
+- capital-intensive industrial/defense/airline/retail stress: DE, ETN, EMR, NOC, LUV, TGT.
+
+ADRs / 20-F / 40-F issuers deliberately left out: current `aritiq/edgar/xbrl.py` companyfacts extraction is US-GAAP 10-K/10-Q centered. Forcing foreign private issuers would mix benchmark expansion with issuer-form support.
+
+Added `benchmark/reliability/xbrl_calibration.py`: reproducible calibration report over `xbrl_verify.py` run JSON. Confidence definition uses existing verifier state only:
+
+- **high** = decisive math verdict (`VERIFIED` or `WRONG_MATH`);
+- **medium** = conservative verifier decline (`INSUFFICIENT_EVIDENCE`);
+- **low** = no XBRL claim / fetch failure.
+
+No invented model confidence score. Precision/FPR/recall are automatic operating metrics over this XBRL lane:
+
+- precision = `VERIFIED / (VERIFIED + WRONG_MATH)`;
+- false-positive rate = `WRONG_MATH / (VERIFIED + WRONG_MATH)`;
+- verification recall/coverage = `VERIFIED / all emitted XBRL claims`.
+
+## Measured result (reproducible)
+
+Commands:
+
+```bash
+python3 benchmark/reliability/xbrl_verify.py --md benchmark/reliability/XBRL_REPORT.md
+python3 benchmark/reliability/xbrl_calibration.py benchmark/reliability/cache/runs/xbrl_run_1782971461.json --md benchmark/reliability/PHASE5_XBRL_CALIBRATION.md
+```
+
+Expanded deterministic XBRL run:
+
+- **115 filers**.
+- **354 XBRL-grounded claims**.
+- Verdicts: **281 VERIFIED**, **63 INSUFFICIENT_EVIDENCE**, **10 WRONG_MATH**.
+- Statement types: **180 eps_reconciliation**, **88 balance_sheet_identity**, **86 cash_flow_tie_out**.
+- Precision (`VERIFIED / VERIFIED+WRONG_MATH`): **96.6%**.
+- False-positive rate (`WRONG_MATH / VERIFIED+WRONG_MATH`): **3.4%**.
+- Verification recall / coverage (`VERIFIED / all emitted claims`): **79.4%**.
+- Decline rate (`INSUFFICIENT_EVIDENCE / all emitted claims`): **17.8%**.
+- Confidence calibration: high tier **281 VERIFIED / 10 WRONG_MATH**; medium tier **63 INSUFFICIENT_EVIDENCE**.
+
+WRONG_MATH root-cause queue (all EPS-only XBRL-lane convictions; not human-adjudicated issuer-error claims):
+
+| Ticker | Sector | Operands `[eps, numerator, shares]` | Computed EPS | Root cause |
+|---|---|---:|---:|---|
+| BAC | Banking | `[3.81, 29055000000, 7680900000]` | 3.7828 | XBRL EPS operands do not reconcile within existing per-share rounding tolerance; accounting-scope review required before calling filer error. |
+| GS | Banking | `[51.95, 16300000000, 312700000]` | 52.1266 | same. |
+| T | Telecom | `[3.04, 21889000000, 7169000000]` | 3.0533 | same. |
+| DUK | Utility | `[6.31, 4912000000, 777000000]` | 6.3218 | same; appears in both EPS variants. |
+| DUK | Utility | `[6.31, 4912000000, 777000000]` | 6.3218 | duplicate basic/diluted reported same values. |
+| ETSY | E-commerce (mid-cap) | `[1.39, 162982000, 124114000]` | 1.3132 | same. |
+| DDOG | Software (growth) | `[0.31, 107741000, 363472000]` | 0.2964 | same. |
+| GEV | Industrials (spinoff) | `[17.92, 4884000000, 272000000]` | 17.9559 | same. |
+| NTRS | Banking | `[8.78, 1695100000, 191358026]` | 8.8583 | same. |
+| NTRS | Banking | `[8.74, 1695100000, 192246525]` | 8.8173 | same. |
+
+Tests added: `tests/test_xbrl_calibration.py` pins the 115-filer/354-claim run totals, calibration percentages, and report boundary text.
+
+## Honest boundary
+
+- This does **not** claim the original prose-extraction reliability harness has been live-expanded to 115 filers. It could not be, because no model provider key was available for new extraction caches.
+- `REPORT_LATEST.md` remains the current 83-filer prose-extraction benchmark; `PHASE5_XBRL_CALIBRATION.md` is the expanded deterministic SEC-companyfacts lane.
+- WRONG_MATH rows above are calibration/root-cause queue entries, not adjudicated true filer mistakes. Treating any as real issuer arithmetic error requires filing-level accounting review.
+- `aritiq/core/` remains model-SDK-free; Phase 5 added no model call path.
+
+---
+
+# Phase 3 — item 3: AI Analyst Mode
+
+Written 2026-07-02. Closes handoff Phase 3 item 3 (build last, highest risk —
+"the one place a model touches output directly"). `aritiq/analyst.py` lives
+OUTSIDE `aritiq/core/`; the verifier remains model-free and the module itself
+imports no model SDK (the completion function is injected, defaulting lazily
+to the extractor's existing provider plumbing).
+
+## What was built — a three-layer deterministic boundary
+
+1. **The ledger.** Only VERIFIED claims become facts the model may see.
+   Every other status (WRONG_MATH, INSUFFICIENT_EVIDENCE, UNSUPPORTED_NUMBER,
+   UNCHECKED, AMBIGUOUS, CONFLICT, PROPAGATED_ERROR, NEEDS_REVIEW) goes to a
+   blocked list whose numeric values are **digit-stripped** before anything
+   downstream — the model cannot leak a number it never receives (tested:
+   blocked values are absent from the prompt even when a related verified
+   fact makes the model run; the blocked STATUS is disclosed, the value is not).
+2. **Pre-model refusal gates** (all deterministic, all `model_called=False`):
+   - *topic-precision*: if any topic the question touches has blocked claims
+     and no verified claim for that topic, refuse — a verified fact on an
+     ADJACENT topic is not license to narrate an unverified one;
+   - *topic-coverage*: if any topic the question names has no claims at all,
+     refuse rather than produce a fluent non-answer from adjacent facts;
+   - *no-data*: nothing relevant at all → refuse.
+   Both topic gates were added because THE AT-SCALE MEASUREMENT CAUGHT THE
+   HOLES (v0 answered "does cash tie out to balance-sheet cash?" from a
+   verified balance-sheet fact while the cash tie-out was blocked — 82 gate
+   failures on real data). Each hole is now a named regression test. This is
+   recorded deliberately: the measurement catching the design's first attempt
+   is the discipline working, not an embarrassment to hide.
+3. **Post-model number whitelist.** Every numeric token in the model's answer
+   must match a value from the verified facts it was given
+   (rounding-tolerant; prose counters ≤12 allowed); every citation must name
+   a provided fact; uncited or unparseable output is rejected. A fluent
+   hallucination is withheld and replaced with the guard's reason.
+
+Surfacing: `POST /analyst {ticker, question}` — refusals work KEYLESS and
+cost zero tokens (the gates run before narration); an answerable question
+with no configured key is a clear 503, never a keyless guess.
+
+## Measured result (reproducible)
+
+`python benchmark/reliability/analyst_eval.py --live --md benchmark/reliability/ANALYST_REPORT.md`
+(exit code enforces the gates):
+
+**Deterministic sweep** — 78 filers × 3 questions = 234 pairs against the
+real replay verdicts, answer path exercised end-to-end via a deterministic
+citing stub (so `answered` also proves the whitelist passes on real values):
+- Outcomes: **answered 136 / refused_blocked 75 / refused_no_data 23**.
+- **The adversarial test, at scale: 72/72** (filer, question) pairs whose
+  topic has only non-VERIFIED verdicts refused BEFORE any model call —
+  every one a real filer whose relevant number is genuinely bad
+  (TSLA/META/KO restricted-cash among them). Blocking statuses named:
+  INSUFFICIENT_EVIDENCE 71, UNSUPPORTED_NUMBER 10.
+- Zero answers over topics with no verified facts; zero uncited answers.
+  **0 hard-gate failures.**
+
+**Live narration** (gemini, the configured provider, from this sandbox):
+- AAPL balance sheet → **answered**, cited [F1], numbers 359,241 / 285,508 /
+  73,733 all from the verified fact — passed the whitelist.
+- JPM balance sheet → **answered**, cited. PLTR EPS → **answered**, cited
+  [F2, F3].
+- AAPL EPS → **refused_blocked pre-model** (its EPS is INSUFFICIENT_EVIDENCE
+  in the adjudicated replay).
+- **Live adversarial: TSLA cash → refused_blocked, model_called=False** —
+  zero tokens spent narrating an unverifiable number.
+
+Tests: `tests/test_analyst.py` (17 offline cases with fake models: ledger
+composition, digit-stripping, THE adversarial case proven with a stub that
+raises if invoked, both topic-gate regressions, hallucinated-number/invented-
+citation/uncited/unparseable rejection, rounding+counter tolerance) +
+`tests/test_backend_analyst.py` (4 cases). Full suite **509 passed, 1
+skipped** (was 455 at session start — +54 across the three Phase 3 items,
+zero regressions). Firewall: `aritiq/core/` and `aritiq/analyst.py` import no
+model SDK (grep clean).
+
+## Honest boundary (what is NOT proven)
+
+- **Wording, not truth-of-wording.** The guards pin WHICH numbers can be
+  spoken and WHEN to refuse. They do not pin phrasing: a model could
+  mis-CHARACTERIZE a verified number in words ("declined" for a rise) without
+  using a non-whitelisted numeral. Narrative-faithfulness checking is future
+  work; the live samples looked faithful but 4 samples prove reachability,
+  not prose quality.
+- Relevance matching is deterministic keyword/overlap (v1). A question
+  phrased entirely without topic words refuses as no-data rather than risking
+  a wrong route — conservative, closed-world by construction. Multi-topic
+  questions require every named topic verified-covered, which can over-refuse
+  (e.g. "why did margin decrease" needs percent_change coverage too).
+- The whitelist allows integer prose counters ≤12 and rounding to ≤3
+  decimals; a hallucination inside those tolerances (e.g. asserting "3" of
+  something) would pass numerically. It cannot smuggle a financial figure.
+- The backend endpoint answers only over the 83 cached benchmark filers'
+  verdicts; live-audit-then-ask wiring is future work.
+
+## Changed files
+
+- `aritiq/analyst.py` (new) — ledger, gates, whitelist, provider-agnostic.
+- `benchmark/reliability/analyst_eval.py` (new) — 234-pair sweep + live
+  narration; `ANALYST_REPORT.md` (new).
+- `backend/app.py` — `POST /analyst` (keyless refusals; 503 over guessing).
+- `tests/test_analyst.py`, `tests/test_backend_analyst.py` (new, 21 tests).
+
+## Reproduce
+
+```bash
+pytest -q                                                      # 509 passed, 1 skipped
+python benchmark/reliability/analyst_eval.py                   # 72/72 refusals, exit 0
+python benchmark/reliability/analyst_eval.py --live            # + live narration (needs key)
+```
+
+---
+
+# Phase 3 — item 2: institutional risk dashboard
+
+Written 2026-07-02. Closes handoff Phase 3 item 2 (build second). Presentation
+logic over numbers that already exist — nothing recomputed, nothing new
+verified, `aritiq/core/` untouched.
+
+## What was built
+
+`aritiq/dashboard.py` (new, outside `aritiq/core/` — presentation, not
+verification) assembles five panels per company:
+
+1. **Verification Score** — calls the REAL `core/score.py::compute_score` on
+   the recorded verdicts (minimal Claim/VerificationResult objects rebuilt
+   from harness claim records so weights/exclusions stay in exactly one
+   place). Weighted + unweighted shown as a pair; the vacuous-score guard
+   passes through as UNASSESSED, never a clean 100.
+2. **Evidence Coverage** — NEW metric, decided **deterministic** (per the
+   roadmap's explicit fork): share of claims whose rule-required evidence
+   flags were all present in the extracted claim (`evidence_emitted`). Stated
+   as a property of extraction grounding, not of the numbers.
+3. **Disclosure Quality** — NEW metric, decided **deterministic**: of the
+   INSUFFICIENT_EVIDENCE declines, the share that is *explained* — required
+   disclosure context present in the grounded claim OR SEC XBRL adjudicated
+   the figure. Panel copy states it is a JOINT property of filer disclosure
+   and extraction grounding, not a pure filer attribute. (A model-assisted
+   version would live outside core and be labeled; v1 deliberately isn't.)
+4. **Cross-Year Consistency** — derived from `company_memory.py`'s existing
+   signals: % of usable multi-year series with no detected friction (dropped
+   non-comparable spans, fallback-tag definition risk). `split_sensitive` is
+   surfaced but NOT penalized — it flags every per-share concept as a class,
+   so penalizing it would deduct identical points from every EPS-reporting
+   filer (decision documented in code + tested).
+5. **Restatement Risk** — counts of `core/restatement.py`'s RestatementType
+   language classifications on CONFLICT results. **No cross-document input ⇒
+   UNASSESSED**, never "low risk"; ran-and-found-none is a distinct state
+   with copy saying "no conflicts DETECTED", not "no restatement occurred".
+   Never a fabricated 0-100.
+
+Surfacing: `GET /dashboard/{ticker}` (backend, deterministic, keyless — built
+from the newest committed replay run + cached company memory; 404 for tickers
+outside the cache rather than fabricating panels) and
+`frontend/components/RiskDashboard.tsx` (renders UNASSESSED/NO DATA states as
+states; boundary line ships with the data).
+
+## Measured result (reproducible)
+
+`python benchmark/reliability/risk_dashboard.py --md benchmark/reliability/DASHBOARD_REPORT.md`
+(exit code enforces the agreement gates):
+
+- **78 filers dashboarded** (the filers with prose claims in the newest replay
+  run; the 5 extraction-empty filers are visible as absent, not painted over).
+- **Agreement gate 1 — totals:** dashboard-recovered verdict totals equal the
+  run's own: **VERIFIED 159 / INSUFFICIENT_EVIDENCE 70 / UNSUPPORTED 9 /
+  WRONG_MATH 0** — exactly REPORT_LATEST.md's established numbers. AGREE.
+- **Agreement gate 2 — known-decline filers not clean:** TSLA, META, KO (the
+  XBRL-confirmed restricted-cash scope differences from Phase 1 item 2) each
+  show ≥1 INSUFFICIENT_EVIDENCE in the verification panel AND their
+  disclosure-quality panel classifies those declines as EXPLAINED (the
+  restricted-cash disclosure reached the claim). A filer with known declines
+  cannot silently present as clean. PASS.
+- **Agreement gate 3 — no fabricated restatement risk:** all 78 restatement
+  panels are UNASSESSED on this single-filing run. PASS.
+- **Agreement gate 4 — shape:** all 78 dashboards have exactly the five
+  panels, all `deterministic`. PASS. **0 gate failures overall.**
+- Real differentiation, not a flat metric: consistency ranges from 11.1 (AMD —
+  heavy dropped-span history) through 40.0 (AAPL) to 100.0 (PLTR).
+- Tests: `tests/test_dashboard.py` (13 offline cases pinning every panel
+  definition, the vacuous-guard passthrough, split-not-penalized, and
+  unassessed-never-low-risk) + `tests/test_backend_dashboard.py` (2 cases).
+  Full suite **488 passed, 1 skipped** (+15, zero regressions). Firewall clean
+  (`aritiq/dashboard.py` imports core types/functions and edgar memory — no
+  model SDK anywhere in the chain).
+
+## Honest boundary (what is NOT proven)
+
+- Presentation only. The dashboard adds no verification; this measurement
+  proves the presentation does not DISTORT upstream numbers, not that the
+  upstream numbers are more right than STATUS.md already claims.
+- Disclosure Quality conflates filer disclosure with extraction grounding by
+  construction (stated on the panel). Separating them would need labeled
+  extraction-quality data that does not exist yet.
+- Consistency's "clean" definition is one defensible aggregation of the
+  existing gates, not a standard. The raw signal counts ship in `components`
+  so a reviewer can re-weight them.
+- Restatement Risk has no real cross-document conflict data in this
+  measurement (single-filing benchmark); its populated path is pinned by
+  offline tests only. Measuring it on real multi-filing conflicts is future
+  work (needs the multi-doc pipeline run over real restatement pairs).
+- The backend endpoint serves only the 83 cached benchmark filers; it 404s
+  otherwise instead of running a live audit.
+
+## Changed files
+
+- `aritiq/dashboard.py` (new) — five deterministic panels.
+- `benchmark/reliability/risk_dashboard.py` (new) — agreement-gate
+  measurement; `DASHBOARD_REPORT.md` (new).
+- `backend/app.py` — `GET /dashboard/{ticker}` + replay-record loader.
+- `frontend/components/RiskDashboard.tsx` (new), `frontend/lib/types.ts`,
+  `frontend/lib/api.ts` — UI rendering states as states (typecheck clean).
+- `tests/test_dashboard.py`, `tests/test_backend_dashboard.py` (new, 15 tests).
+
+## Reproduce
+
+```bash
+pytest -q                                                      # 488 passed, 1 skipped
+python benchmark/reliability/risk_dashboard.py                 # 4 gates, exit 0
+cd frontend && npm run typecheck
+```
+
+---
+
+# Phase 3 — item 1: SEC filing timeline
+
+Written 2026-07-02. Closes handoff Phase 3 item 1 (build first, lowest risk).
+Sequencing work only — no new verification logic, `aritiq/core/` untouched.
+
+## What was built
+
+`aritiq/edgar/timeline.py` sequences a company's filings by type and date from
+the SEC submissions feed (`data.sec.gov/submissions/CIK{cik}.json` →
+`filings.recent`), following the exact `sic.py` pattern: plain HTTP, cached
+JSON (`cache/timeline/`), 0.12s throttle, never raises out of a batch loop
+(`fetch_error` recorded instead), failures never cached. Form 4 ownership
+detail REUSES `form4.py` (`form4_events_with_ownership` wraps
+`fetch_recent_form4_transactions`); no ownership parsing was rebuilt.
+
+**The honest-coverage rule is the feature, not a footnote.** Every event
+carries a `verification_coverage` label from a closed, tested enum:
+
+- `full_financial_verification` — 10-K, 10-Q only (the measured forms).
+- `partial_financial_verification` — 8-K **with Item 2.02 in the feed's
+  `items` field** (the only 8-K variant carrying XBRL financials, per Round 7).
+  An 8-K *without* 2.02 is `listed_only` — finer-grained than a blanket
+  "8-K = partial" claim would be.
+- `ownership_data_only` — Form 4: transactions parsed from the filer's XML,
+  explicitly NOT financially verified.
+- `listed_only` — everything else (DEF 14A, S-1, 13D/13G, 13F, Forms 3/5, 144,
+  unknown/future forms) **and all amendments**: 10-K/A does NOT inherit 10-K's
+  coverage, because the benchmark measured "10-K", not "10-K/A".
+
+Surfacing: `GET /timeline/{ticker}` (backend/app.py, behind `require_api_key`)
+ships `COVERAGE_LEGEND` in every response so no client invents its own claim;
+`frontend/components/FilingTimeline.tsx` renders the coverage statement as
+always-visible copy plus a per-event badge. README gained a filing-timeline
+section stating the same boundary.
+
+## Measured result (reproducible)
+
+`python benchmark/reliability/filing_timeline.py --md benchmark/reliability/TIMELINE_REPORT.md`
+(exit code enforces the gates — a gate failure fails the run):
+
+- **83/83 filers** in the reliability set built a timeline; 0 fetch failures.
+- **126,492 events sequenced** (spans 1994-02-11 → 2026-07-01). Coverage
+  breakdown: 2,375 full (10-K/10-Q), 2,407 partial (8-K w/ Item 2.02, out of
+  7,837 8-Ks total — the 2.02 refinement is doing real work), 42,752 ownership
+  (Form 4), 78,958 listed-only.
+- **0 integrity-gate failures** across all 83: every filing date ISO-parses,
+  every timeline sorted newest-first, every accession matches the EDGAR
+  format, every event's coverage label is in the closed enum, and every 8-K
+  labeled partial actually lists Item 2.02.
+- **Independent spot-check 3/3 PASS** (AAPL, JPM, WELL): the latest 10-K's
+  accession + filing date agree between the submissions JSON and SEC's
+  *separate* browse-edgar Atom endpoint — the reproducible version of
+  "hand-check against EDGAR" (AAPL 0000320193-25-000079 / 2025-10-31,
+  JPM 0001628280-26-008131 / 2026-02-13, WELL 0000766704-26-000010 /
+  2026-02-12).
+- Tests: `tests/test_timeline.py` (14 offline cases: coverage mapping incl.
+  amendments/unknowns/8-K-item exactness, sort + tiebreak, filter/limit,
+  cache-poisoning prevention, cache-hit no-refetch, document URLs, fetch
+  failure, ragged-feed columns) + `tests/test_backend_timeline.py` (4 cases:
+  response shape, legend ships with data, filters, 404). Full suite
+  **473 passed, 1 skipped** (was 455 — +18, zero regressions). Firewall clean.
+
+## Honest boundary (what is NOT proven)
+
+- This proves **sequencing** — types, dates, accessions, links — not
+  verification. Financial verification coverage is exactly the per-form label;
+  the timeline adds no new verified numbers anywhere.
+- The submissions `recent` window is the most recent 1,000 filings OR the last
+  full year, whichever is more (measured: AAPL/WELL ≈1,000 back to 2015; JPM
+  25,252 covering one year of structured-notes prospectuses). Older filings
+  live in paginated archives that v1 does NOT fetch; `has_older_filings`
+  surfaces the truncation.
+- The spot-check covers the latest 10-K for 3 filers across two SEC endpoints;
+  it is not a per-event audit of all 126,492 entries.
+- `form4_events_with_ownership` is network-heavy (one index.json + one XML per
+  filing, straight from `form4.py`) and was smoke-level exercised, not
+  benchmark-measured; the Form 4 events *in the timeline itself* come from the
+  submissions feed and are fully covered by the gates above.
+
+## Changed files
+
+- `aritiq/edgar/timeline.py` (new) — timeline + coverage labels + Form 4 reuse.
+- `benchmark/reliability/filing_timeline.py` (new) — 83-filer measurement with
+  integrity gates + cross-endpoint spot-check; `TIMELINE_REPORT.md` (new).
+- `backend/app.py` — `GET /timeline/{ticker}` (legend ships with data).
+- `frontend/components/FilingTimeline.tsx` (new), `frontend/lib/types.ts`,
+  `frontend/lib/api.ts` — UI with always-visible coverage copy (typecheck
+  clean; same render-validation boundary as the Phase 2 graph UI).
+- `tests/test_timeline.py`, `tests/test_backend_timeline.py` (new, 18 tests).
+- `README.md` — filing-timeline section under the filing-types table.
+
+## Reproduce
+
+```bash
+pytest -q                                                    # 473 passed, 1 skipped
+python benchmark/reliability/filing_timeline.py              # gates + spot-check, exit 0
+cd frontend && npm run typecheck
+```
+
 ## ROUND 8 — institutional feature push (multi-period trends, peer comparison, audit export)
 
 Three features aimed at institutional credibility, each additive, each leaving all
@@ -508,3 +967,393 @@ operand.
 ## Test + firewall status after this pass
 - `python -m pytest tests/ -q` → **294 passed, 1 skipped** (was 284; +10).
 - `grep -r "import anthropic|openai|groq|gemini" aritiq/core/` → **empty** (clean).
+
+---
+
+# Phase 1 (post-Phase-3) — closing the 7 WRONG_MATH cases
+
+Written 2026-07-01. This closes roadmap Phase 1 items 1–3. The 83-filer replay run
+carried **7 WRONG_MATH convictions**; every one is now resolved. Final adjudicated
+verdict distribution over 238 in-scope claims: **VERIFIED 159, INSUFFICIENT_EVIDENCE
+70, UNSUPPORTED_NUMBER 9, WRONG_MATH 0** (was WRONG_MATH 7). No VERIFIED result
+regressed. `pytest -q` → **440 passed, 1 skipped**; `aritiq/core/` imports no model
+SDK (firewall clean).
+
+The discipline is the same JPM/WFC/AMD one: each conviction is traced to a
+mechanism, fixed with a deterministic, non-ticker-specific rule, and proven not to
+weaken (a genuine error in the same shape still convicts). Three of the fixes are
+pure `aritiq/core` rule improvements; the fourth is an independent XBRL cross-check
+in the harness. **No arithmetic moved into the LLM; no ticker is special-cased.**
+
+## The four mechanisms and their fixes
+
+**(A) Per-share published-rounding tolerance — resolves W directly; underpins SO/TRV.**
+`aritiq/core/rules.py::eps_rounding_tolerance`. EPS is `net_income / shares`, and
+each operand is printed already-rounded (net income to $1M, shares to 0.1M or 1M,
+EPS to the cent). The smallest discrepancy a *genuine* error could produce is bounded
+below by that input rounding propagated through the division:
+`tol = half_ulp(eps) + half_ulp(N)/|S| + |N|/S² · half_ulp(S)`. A gap inside this band
+is indistinguishable from input rounding, so convicting it is a false WRONG_MATH.
+Wayfair is the clean case: −313/128 = −2.4453 vs published −2.44, entirely explained
+by shares rounded to the nearest million. **Non-weakening:** the tolerance is
+`max(flat_floor, propagated)`, never tighter than the old half-cent floor, so nothing
+that verified before can flip; and a genuine multi-cent error (tested: 3.99 vs
+4341/1109 = 3.9143) still convicts. `half_ulp` reads each operand's own decimal/
+trailing-zero granularity, capped at 0.1% of the value so ambiguous zeros can't
+inflate the band. A whole-number EPS float (2.00 → 2.0) is pinned to half-cent
+precision.
+
+**(B) Mezzanine / temporary-equity completeness gate — resolves WELL (balance sheet).**
+`aritiq/core/rules.py::check_balance_sheet_identity`, new `redeemable_equity_present`
+evidence. UPREITs and any issuer with **redeemable** noncontrolling interests park a
+"temporary" (mezzanine) equity block *between* total liabilities and permanent equity
+— captured by neither the `Liabilities` tag nor either `StockholdersEquity` tag. So
+Assets = Liabilities + Mezzanine + Equity, and a two-term tie-out falls short by
+exactly the mezzanine block (Welltower: 67,303,047 vs 24,100,108 + 42,939,716, a
+263,223 / 0.39% gap = the redeemable-OP-unit line). When the tie-out fails **and** a
+redeemable/temporary-equity line is disclosed (from the filer's own XBRL
+`RedeemableNoncontrollingInterestEquityCarryingAmount` tag, or redeemable/mezzanine
+language in grounded context), the equity picture is provably incomplete → decline,
+don't convict. **Non-weakening:** failure-only, evidence-required; the same failing
+sheet with no mezzanine signal still convicts (tested), and the flag never touches a
+balanced sheet.
+
+**(C) Independent XBRL adjudication backstop — resolves NEE, HON, CARR, SO, TRV.**
+`benchmark/reliability/harness.py::xbrl_adjudicate`. These five are prose extraction
+scope errors: the extractor grounded a wrong-scope operand that a better prompt would
+avoid, but which the replay cache still carries. Rather than special-case them, before
+recording any prose WRONG_MATH we cross-check it against the SEC's own standardized
+XBRL facts — an independent, deterministic grounding (plain SEC JSON, no LLM). If an
+XBRL-grounded version of the same rule reconciles the figure, the prose conviction was
+a scope artifact → **downgrade to INSUFFICIENT_EVIDENCE** (prose scope unconfirmed;
+XBRL reconciles). If XBRL independently *also* convicts, the WRONG_MATH stands. This
+never manufactures a VERIFIED and never hides a real error. Per filer:
+
+| Ticker | Prose operands (wrong scope) | XBRL-grounded operands (correct scope) | Mechanism |
+|---|---|---|---|
+| NEE  | eps 3.31, ni 6,835, **sh 2,083 (period-end)** | sh **2,064.5 (weighted-avg)** → VERIFIED | period-end vs weighted-average shares |
+| HON  | eps 7.40, **ni 4,772 (consolidated)**, sh 635.3 | ni **4,729 / sh 639 (attributable)** → VERIFIED | numerator included noncontrolling interest |
+| CARR | eps 1.74, **ni 1,587 (consolidated)**, sh 852.4 | ni **1,484 (attributable)** → VERIFIED | numerator included NCI/disc-ops |
+| SO   | eps 3.92 (diluted), **ni 4,171 (pre-NCI)**, sh 1,109 | ni **4,341 (attributable to common)** → VERIFIED | consolidated vs attributable-to-common |
+| TRV  | eps 27.83 (basic), **ni 6,288 (total)**, sh 224.2 | ni **6,242 (available to common)** → VERIFIED | two-class / income-available-to-common |
+
+All five downgrade WRONG_MATH → INSUFFICIENT_EVIDENCE in the prose lane; all five
+VERIFY outright in the independent XBRL lane (`xbrl_verify.py`), the two-lanes-agree
+result. WELL's balance sheet downgrades via the same backstop because its XBRL
+grounding declines under fix (B).
+
+## Side effect: the independent XBRL lane got much cleaner too
+Fixes (A) and (B) live in the shared verifier, so the standalone XBRL-grounded lane
+improved from **29 → 8 WRONG_MATH** over the 83 filers with no lane-specific code. A
+diluted-numerator scope guard was added to `build_claims_from_facts` (an UPREIT's
+diluted EPS uses an OP-unit-adjusted numerator that isn't separately tagged; pairing
+the basic income-to-common tag with diluted shares is a scope mismatch, so we decline
+to emit that claim rather than convict — the Welltower diluted case). The **8
+remaining XBRL-lane convictions (BAC, GS, T, DUK×2, ETSY, DDOG, GEV, …) are pre-
+existing and out of Phase-1 scope** — none is one of the 7 prose convictions; their
+gaps exceed the input-rounding band and trace to diluted-numerator / two-class
+subtleties. Documented here as the next layer, not regressions.
+
+## Item 2 — cash_flow_tie_out INSUFFICIENT_EVIDENCE rate (62.5%): correct caution, not a shortfall
+Investigated all 45 cash-flow declines. **Every one is triggered by a restricted-cash /
+escrow / reconciliation disclosure present in the grounded context** — so the source
+text *is* reaching the claim; this is NOT the "text not making it into source_text/
+notes" shortfall the roadmap flagged. Cross-checked against XBRL: **35/45 have a
+confirmed real scope difference** (CF ending cash incl. restricted ≠ BS unrestricted
+cash — TSLA +$1.1B/6.7%, META +$3.2B/9.0%, KO +$740M/7.2%, INTC +$447M), where a naive
+tie-out would be a false WRONG_MATH. The gate is behaving exactly as designed.
+
+The investigation also surfaced a **genuine extraction artifact** worth recording: for
+8 filers (KO, AVB, SO, RTX, BXP, AFRM, …) the prose extractor grounded the *same*
+figure for both cash operands while XBRL shows cf ≠ bs — i.e. it missed the restricted
+difference and grounded one line twice. A tempting "verify the equal case" refinement
+was implemented and then **reverted**: prose alone cannot distinguish a genuine zero-
+restricted tie from a same-line-twice artifact, so verifying the equal case would
+certify an extraction miss as VERIFIED. The conservative decline is the honest verdict;
+the independent XBRL lane recovers the genuine ties by tag. (The next-layer extraction
+fix — force the CF operand to the "…and restricted cash" line — is logged for Phase 2.)
+
+## Item 3 — gold gates expanded over the full 83-filer set
+- **Multi-period XBRL trend verification** (`xbrl_trends.py`): now **83/83 filers**
+  with usable series (was 78/78). **Positive controls 499/499 (100%)**, **negative
+  controls 335/335 (100%)** — real trend claims verify, fabricated ones are caught.
+- **SIC peer comparison** (`peer_metrics.py`): defensible peer comparison in **8 SIC
+  groups** across net_margin, return_on_assets, and debt_ratio (net_margin alone
+  reached only 2). Correctly **declines** groups with < 3 comparable peers and flags
+  outliers with z-scores (SPG net_margin z=2.44; CCI debt_ratio z=2.07). No false
+  comparisons across non-comparable structures (REIT/bank/insurer margins).
+
+## Changed files (Phase 1)
+- `aritiq/core/rules.py` — `eps_rounding_tolerance` + `_decimal_half_ulp` (A);
+  `redeemable_equity_present` gate in `check_balance_sheet_identity` (B); cash-flow
+  decline comment hardened.
+- `aritiq/core/verify.py` — `_context_names_redeemable_equity` + wiring of the
+  mezzanine evidence flag.
+- `aritiq/edgar/xbrl.py` — `temp_equity` fact (`RedeemableNoncontrollingInterest…` /
+  `TemporaryEquity…` tags).
+- `benchmark/reliability/xbrl_verify.py` — mezzanine flag in `build_claims_from_facts`;
+  UPREIT diluted-numerator scope guard.
+- `benchmark/reliability/harness.py` — `xbrl_adjudicate` backstop; `prose_verdict` +
+  `adjudication` recorded per claim.
+- Tests: `tests/test_phase1_rounding_and_mezzanine.py` (new, 13 cases incl. non-
+  weakening guards); `tests/test_wrong_line_item_gates.py` (SO reclassified + genuine-
+  error guard).
+
+## Reproduce
+```bash
+pytest -q                                                   # 440 passed, 1 skipped
+python benchmark/reliability/harness.py --replay            # prose run, WRONG_MATH=0 adjudicated
+python benchmark/reliability/report.py --md benchmark/reliability/REPORT_LATEST.md
+python benchmark/reliability/xbrl_verify.py                 # independent lane, 29→8
+python benchmark/reliability/xbrl_trends.py                 # 499/499 pos, 335/335 neg
+python benchmark/reliability/peer_metrics.py                # 8 SIC groups
+```
+
+---
+
+# Phase 2 — item 4: Financial Knowledge Graph UI
+
+Written 2026-07-01. Closes ROADMAP Phase 2 item 4. This is **surfacing**
+existing graph/verdict data, not new verification logic.
+
+## What was built
+
+`frontend/components/DependencyGraph.tsx` already existed and rendered a graph
+from `result.claim.depends_on`, but the inspector was upstream-only. It did not
+show downstream dependents, full claim/source evidence, verdict explanation,
+operand provenance metadata, or `PROPAGATED_ERROR.caused_by` root cause.
+
+Changes:
+
+1. Added `frontend/lib/graph.ts` as the single frontend graph-neighborhood
+helper. It builds nodes, edges, missing dependency references, upstream,
+downstream, and caused-by lookup from one `AuditResult.results` payload.
+Downstream computation lives there, not duplicated in backend.
+2. Extended `DependencyGraph` selected-node panel to show verdict, claim text,
+source/evidence statement, verdict explanation, operand source metadata,
+upstream dependencies, downstream dependents, and propagated-error root cause.
+3. Added backend serialization of `claim.source_text` in `backend/app.py` so UI
+can show claim-level evidence, not only operand snippets.
+
+## Measured result (reproducible)
+
+`python benchmark/eval_graph_ui_data.py --md benchmark/GRAPH_UI_REPORT.md`
+
+Replay over real `benchmark/runs_graph/` extraction output, not synthetic
+all-leaf fixtures:
+
+| Doc | Claims | Edges | Upstream nodes | Downstream nodes | Evidence nodes | caused_by hits | Missing refs | Note |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| A Northwind Logistics | 8 | 0 | 0 | 0 | 8 | 0 | 0 | negative control |
+| B Acme Invoice | 5 | 1 | 1 | 1 | 5 | 1 | 0 | real edge structure |
+| C Globex Annual Highlights | 5 | 0 | 0 | 0 | 4 | 0 | 0 | negative control |
+| D Meridian Cost Report | 3 | 1 | 1 | 1 | 3 | 1 | 0 | real edge structure |
+
+- **2 real `depends_on` edges** available to UI.
+- **2 nodes with downstream dependents** — UI has real downstream content.
+- **2 `PROPAGATED_ERROR.caused_by` hits** under fault injection.
+- **0 missing dependency refs.**
+- **0 false edges** on negative controls A/C.
+
+## Honest boundary
+
+- This does not create new graph inference. It renders graph structure already
+present in audit results. If extraction emits no edges, UI says so.
+- Browser plugin was unavailable in this session. Render validation used
+frontend typecheck/build. `npm run lint` is not configured; Next.js opened the
+interactive ESLint setup prompt, so no lint config was created during this pass.
+- No backend neighborhood endpoint added; current frontend computes graph
+neighborhood from the serialized audit result once, in `frontend/lib/graph.ts`.
+
+## Changed files
+
+- `frontend/lib/graph.ts` — graph model/neighborhood helper.
+- `frontend/components/DependencyGraph.tsx` — richer inspector.
+- `frontend/lib/types.ts` — claim-level `source_text`.
+- `backend/app.py` — serialize `claim.source_text`.
+- `benchmark/eval_graph_ui_data.py` — reproducible graph UI data measurement.
+- `benchmark/GRAPH_UI_REPORT.md` — measurement report.
+- `tests/test_backend_graph_serialization.py` — serializer regression.
+
+## Reproduce
+
+```bash
+python benchmark/eval_graph_ui_data.py --md benchmark/GRAPH_UI_REPORT.md
+cd frontend && npm run typecheck && npm run build
+pytest -q # 454 passed, 2 skipped
+```
+
+---
+
+# Phase 2 — item 5: Multi-filing company memory
+
+Written 2026-07-01. Closes ROADMAP Phase 2 item 5. This packages existing
+cached companyfacts history into a per-company memory view; it does not add new
+SEC fetching and does not put model logic into `aritiq/core/`.
+
+## What was built
+
+`aritiq/edgar/xbrl_history.py` already returned per-concept multi-year series
+with the right comparability gates: `tag_used`, `dropped_noncomparable_spans`,
+and `split_sensitive`.
+
+New `aritiq/edgar/company_memory.py` packages those into per-company metric
+trajectories, per-period YoY drift, latest YoY drift per metric, and
+deterministic comparability/accounting-risk signals:
+`noncomparable_spans_dropped`, `split_sensitive_series`, and
+`fallback_xbrl_tag_used`.
+
+## Accounting-change decision
+
+Built deterministic signal surfacing only. In this pass, "accounting change /
+definition risk detected" means an XBRL/comparability gate fired: fallback tag
+use, dropped non-comparable spans, or split-sensitive series.
+
+Footnote-language interpretation is **not** performed. If added later, it must
+live in an extraction layer (same firewall discipline as `aritiq/extract/`), not
+inside `aritiq/core/`.
+
+## Measured result (reproducible)
+
+`python benchmark/reliability/company_memory.py --md benchmark/COMPANY_MEMORY_REPORT.md`
+
+Cached SEC companyfacts only; no model calls:
+
+- **83** filers measured.
+- **83/83** companies had usable multi-year series.
+- **734** usable metric series.
+- **10,678** cross-year points.
+- **83** companies had deterministic comparability signals.
+- Signal counts:
+  - `noncomparable_spans_dropped`: **260**
+  - `fallback_xbrl_tag_used`: **54**
+  - `split_sensitive_series`: **243**
+
+## Honest boundary
+
+- This is deterministic XBRL memory, not accounting footnote interpretation.
+- Fallback tag use is a definition-risk signal, not proof of an accounting
+policy change.
+- `split_sensitive_series` says raw per-share/share-count comparisons need care
+across splits unless restated; it does not decide whether restatement occurred.
+- `dropped_noncomparable_spans` proves the gate fired and excluded stubs/YTD/
+non-comparable spans; it does not explain why the filer had those spans.
+
+## Changed files
+
+- `aritiq/edgar/company_memory.py` — per-company memory aggregation.
+- `benchmark/reliability/company_memory.py` — real cached-filer measurement.
+- `benchmark/COMPANY_MEMORY_REPORT.md` — measurement report.
+- `tests/test_company_memory.py` — deterministic trajectory/signal tests.
+
+## Reproduce
+
+```bash
+python benchmark/reliability/company_memory.py --md benchmark/COMPANY_MEMORY_REPORT.md
+pytest -q # 454 passed, 2 skipped
+```
+
+---
+
+# Phase 2 — item 1: depends_on extraction tagging (the highest-leverage item)
+
+Written 2026-07-01. Closes ROADMAP Phase 2 item 1. The provenance graph
+(`core/graph.py`), weighted score (`core/score.py`), and restatement classification
+(`core/restatement.py`) were all built and tested in Phase 3 but **inert**: they only
+do something when claims carry `depends_on` edges, and nothing populated them on real
+extraction (PHASE3_PROGRESS.md's named boundary). This item makes the edges real.
+
+## What was built
+
+**The gap, precisely.** `node_id`/`depends_on` were already wired end-to-end (schema,
+`parse_claims`, `raw_to_claim`, `build_dag`, `propagate_errors`) and the prompt even
+mentioned them — but the few-shot example demonstrated **neither**, and its one derived
+claim grounded revenue as a raw source figure (the `depends_on = []` case), so the model
+had no positive pattern and emitted nothing. Also, the reliability harness measures only
+leaf-level `internal_consistency` claims, so it could never surface edges — the main
+`extract_claims` (source + summary) path is where derived-figure chains live.
+
+**Two changes, belt-and-suspenders, both extraction-side (firewall untouched — the
+verifier still only ever *consumes* edges):**
+
+1. **A deterministic linker** — `aritiq/extract/linker.py`, run inside `extract_claims`
+   after `parse_claims`. It infers an output→input edge B→A only when one of B's
+   operands equals the **computed output** of exactly one dollar-computation claim A
+   (`sum`/`difference`/`product`/`average`), that value is **derived-only** (does not
+   appear as a raw figure in the source), unit-kind matches, the source is unique, and
+   the edge introduces no cycle. Every filter only ever *withholds* an edge — a missing
+   edge fails silently and safely; a wrong edge does not. Edges the LLM already tagged
+   are preserved (union, never clobbered).
+
+2. **A hardened prompt + a worked chained few-shot** — `aritiq/extract/prompt.py`. A new
+   EXAMPLE 2 shows `node_id` on a computed subtotal and `depends_on` on the total that
+   consumes it, contrasted with a margin that divides by *reported* revenue and
+   therefore stays `depends_on: []`. Live-verified: under the shipped prompt the model
+   now grounds the total as `[Marketing 30, Combined 20]` and emits the edge itself.
+
+**The load-bearing distinction (output→input, NOT shared raw input).** Three claims that
+each divide by the same reported revenue share a *raw* input — none is another's output,
+so all stay leaf. Gold doc A reports `$125M` revenue AND has a `sum` that computes 125
+from two segments; the margin's denominator 125 is the raw reported figure, so linking
+margin→sum would be a false edge. The derived-only filter excludes exactly this.
+
+## Measured result (reproducible)
+
+`python benchmark/eval_depends_on.py` — replay over gold_set A–D against a committed
+corpus of real model output under the shipped prompt (`benchmark/runs_graph/`, kept
+separate from the frozen gold-aligned `benchmark/runs/` so the extraction-accuracy
+regression baseline is untouched):
+
+| Doc | Claims | Edges | Graph nodes | Roots | Propagated on fault | Note |
+|---|---|---|---|---|---|---|
+| A | 8 | 0 | 0 | 0 | 0 | negative control (shared raw input) |
+| B | 5 | 1 | 4 | 1 | 1 | tax base $4,500 = net-before-tax output |
+| C | 5 | 0 | 0 | 0 | 0 | negative control (shared raw input) |
+| D | 3 | 1 | 2 | 1 | 1 | total $50M uses the $20M combined subtotal |
+
+- **2 depends_on edges inferred on real extraction** (was 0) — non-zero graph structure
+  on real filings, not just hand-built fixtures.
+- **Propagation is live:** fault-injecting a `WRONG_MATH` at each source node relabels
+  its downstream consumer `PROPAGATED_ERROR` with the correct `caused_by` — **2/2**.
+  The previously-inert graph machinery is now driven by real extraction edges.
+- **0 false edges** on the shared-raw-input negative controls (A, C) — from BOTH the
+  linker and the LLM.
+- Unit tests: `tests/test_depends_on_linker.py` (12 cases) pin every safety property —
+  positive multi-level chains, shared-raw-input stays leaf, value-in-source excluded,
+  identity/percent never a $-source, ambiguous source not guessed, cycle prevention,
+  LLM edges preserved, idempotency. Full suite **452 passed, 1 skipped**; `aritiq/core/`
+  imports no model SDK (firewall clean).
+
+## Honest boundary
+
+- **The graph is only as complete as extraction expresses.** The linker recovers the
+  output→input edges the extraction actually grounds; if the model grounds raw
+  components instead of an intermediate (the pre-hardening doc-D behavior: total
+  grounded `[12,8,25]`, no edge), the chain isn't in the operands and no edge is
+  inferred. This is the correct, safe failure (silent under-linking), and it is exactly
+  why the prompt was hardened — to lead the model to express intermediates. A missing
+  edge never propagates; that is the design.
+- **Scope of the deterministic linker.** v1 infers **dollar** derivation chains
+  (`sum`/`difference`/`product`/`average` outputs feeding a later operand). Percentage→
+  percentage chains and ratio-multiple chains are left to the prompt/LLM path and not
+  inferred by code — a named limitation, not a silent one. The corpus is 4 documents;
+  broadening it is Phase 2 follow-up work, not a claim made here.
+- **No accuracy score against labeled edges** is claimed — the gold set has no
+  `depends_on` labels, so this is a structure + self-consistency + no-false-edge
+  measurement, reported as exactly that.
+
+## Changed files
+- `aritiq/extract/linker.py` (new) — deterministic output→input linker.
+- `aritiq/extract/extractor.py` — calls `link_claims(claims, source_text=source)`.
+- `aritiq/extract/prompt.py` — sharpened depends_on instruction + worked chained few-shot.
+- `benchmark/eval_depends_on.py` (new) — reproducible replay measurement (+`--regen`).
+- `benchmark/runs_graph/{A..D}.json` (new) — committed hardened-prompt corpus.
+- `benchmark/DEPENDS_ON_REPORT.md` (new) — the measurement table.
+- `tests/test_depends_on_linker.py` (new, 12 tests).
+
+## Reproduce
+```bash
+pytest -q                                   # 452 passed, 1 skipped
+python benchmark/eval_depends_on.py         # 2 edges, 2/2 propagation, 0 false edges
+python benchmark/eval_extraction.py         # frozen extraction baseline still 100% faithful-replay
+```

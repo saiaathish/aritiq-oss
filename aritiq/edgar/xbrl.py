@@ -68,6 +68,19 @@ _EQUITY_TAGS = [
     "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
     "StockholdersEquity",
 ]
+# TEMPORARY / mezzanine equity: redeemable noncontrolling interests, redeemable
+# operating-partnership units (UPREITs), or other securities the filer parks in
+# temporary equity BETWEEN total liabilities and permanent equity. This block is
+# captured by NEITHER the Liabilities tag NOR either StockholdersEquity tag, so a
+# two-term Assets = Liabilities + Equity check legitimately falls short by exactly
+# this amount (the Welltower / UPREIT mechanism). We surface it only to let the
+# balance-sheet completeness gate DECLINE — never to derive a value into the check.
+_TEMP_EQUITY_TAGS = [
+    "RedeemableNoncontrollingInterestEquityCarryingAmount",
+    "RedeemableNoncontrollingInterestEquityFairValue",
+    "TemporaryEquityCarryingAmountAttributableToParent",
+    "TemporaryEquityCarryingAmountIncludingPortionAttributableToNoncontrollingInterests",
+]
 
 # EPS reconciliation: stated_eps == numerator / shares
 # Prefer net income AVAILABLE TO COMMON (the exact tag that resolves the JPM/BAC/DUK
@@ -116,6 +129,7 @@ class XbrlFacts:
     liabilities: Optional[float] = None
     equity: Optional[float] = None
     equity_includes_nci: bool = False       # True when the incl-NCI tag supplied equity
+    temp_equity: Optional[float] = None      # redeemable/temporary (mezzanine) equity, if tagged
 
     # income / EPS
     net_income_total: Optional[float] = None
@@ -305,6 +319,10 @@ def extract_xbrl_facts(
     if t:
         tags["equity"] = t
         out.equity_includes_nci = (t == _EQUITY_TAGS[0])
+    # redeemable / temporary (mezzanine) equity — reported, never derived.
+    out.temp_equity, t = _select_fact(gaap, _TEMP_EQUITY_TAGS, ["USD"],
+                                      period_end=period_end, form=form)
+    if t: tags["temp_equity"] = t
 
     # ---- income / EPS (income = duration facts; EPS/shares per-share units) -----
     out.net_income_total, t = _select_fact(gaap, _NI_TOTAL_TAGS, ["USD"],

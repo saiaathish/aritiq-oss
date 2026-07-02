@@ -31,8 +31,8 @@ export default function RootLayout({
     <html lang="en" className={`dark ${inter.variable} ${mono.variable}`}>
       <body>
         {/* Ambient atmosphere — purely behind content, disabled under reduced-motion */}
-        <div aria-hidden className="ambient-blob animate-blob-drift" style={{ top: "-120px", left: "-80px", width: "420px", height: "420px", background: "#8B5CF6" }} />
-        <div aria-hidden className="ambient-blob animate-blob-drift" style={{ bottom: "-160px", right: "-100px", width: "480px", height: "480px", background: "#F5A524", animationDelay: "-8s" }} />
+        <div aria-hidden className="ambient-blob animate-blob-drift" style={{ top: "-120px", left: "-80px", width: "420px", height: "420px", background: "#3B82F6" }} />
+        <div aria-hidden className="ambient-blob animate-blob-drift" style={{ bottom: "-160px", right: "-100px", width: "480px", height: "480px", background: "#6BB4F0", animationDelay: "-8s" }} />
         <div className="relative z-10">{children}</div>
       </body>
     </html>
