@@ -1,0 +1,12 @@
+# Aritiq API — bundled into the frontend/ Vercel project so api/main.py
+# deploys alongside the Next.js app (Vercel's Root Directory is scoped to
+# frontend/, so a requirements.txt outside this directory is never seen).
+# Keep in sync with ../requirements.txt and ../backend/requirements.txt.
+pydantic>=2          # strict validation of LLM-extracted claims
+certifi>=2023.7.22   # CA bundle for verifying sec.gov TLS (SEC EDGAR fetch)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-dotenv>=1.0     # backend/app.py loads .env at import time; was undeclared anywhere
+google-genai==2.10.0
+PyJWT[crypto]==2.10.1   # verifies Supabase session JWTs
+upstash-redis==1.7.0    # per-user rate-limit counters; falls back to in-memory if unset
