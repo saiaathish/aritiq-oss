@@ -1,3 +1,5 @@
+// navbar
+
 import * as React from 'react';
 import { motion, useScroll, useMotionValueEvent, type Variants } from 'framer-motion';
 import { Menu } from 'lucide-react';
