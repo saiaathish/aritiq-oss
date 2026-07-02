@@ -334,10 +334,4 @@ Aritiq is infrastructure, not a chatbot. It's a guardrail you install before shi
 
 ---
 
-## License
-
-Aritiq is open source under the [MIT License](LICENSE).
-
----
-
 *Built for YC Startup School 2026.*
