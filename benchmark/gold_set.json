@@ -1,0 +1,333 @@
+{
+  "_about": "Hand-labeled extraction gold set for Aritiq Day 2. Each document pairs a SOURCE (ground truth) with an AI-generated SUMMARY (audited). Every numeric claim in each summary is labeled with its correct operation, operand values in the correct order, and per-operand grounding (grounded/inferred/missing). 'expected_status' is the verifier verdict the GOLD operands should produce — used only as a self-consistency check, never to score extraction. 'trap' documents what each hard case stresses.",
+  "_labeling_conventions": {
+    "operand_order": "percent_change/absolute_change: [old, new]; difference: [a,b] for a-b; ratio: [a,b] for a/b; margin_percent: [numerator, denominator].",
+    "sign": "Decreases are negative stated_value (a 25% decline is -25).",
+    "grounded": "value appears verbatim in the source.",
+    "inferred": "value derived from the source by a transparent conversion (unit scaling or summing line items).",
+    "missing": "value is absent from the source; must not be guessed."
+  },
+  "documents": [
+    {
+      "id": "A",
+      "name": "Northwind Logistics — Q3 FY2025 earnings release",
+      "source": "Northwind Logistics — Q3 FY2025 Results\n\nTotal revenue for the third quarter was $125.0 million, up from $100.0 million in the prior-year quarter. Gross profit was $50.0 million. Operating income was $30.0 million, compared with $25.0 million a year ago. Operating expenses were $20.0 million. The company ended the quarter with $80.0 million in cash. Domestic revenue was $75.0 million and international revenue was $50.0 million.",
+      "summary": "Northwind delivered another strong quarter. Total revenue reached $125.0 million, a 30% increase year over year. Gross margin came in at 40%. Operating income grew 20% year over year, an increase of $5.0 million. Gross profit was 2.5 times operating expenses. Combined domestic and international revenue was $125.0 million. The company ended with $80.0 million in cash and strengthened its competitive position in key markets.",
+      "gold_claims": [
+        {
+          "id": "A1",
+          "claim_text": "Total revenue reached $125.0 million, a 30% increase year over year",
+          "operation": "percent_change",
+          "stated_value": 30,
+          "operands": [
+            {"value": 100, "source": "grounded", "source_text": "$100.0 million in the prior-year quarter"},
+            {"value": 125, "source": "grounded", "source_text": "$125.0 million"}
+          ],
+          "unit": "%",
+          "expected_status": "WRONG_MATH",
+          "trap": "operand_order (summary lists 125 before 100); real change is 25%, claim says 30%",
+          "notes": "headline wrong-math catch"
+        },
+        {
+          "id": "A2",
+          "claim_text": "Gross margin came in at 40%",
+          "operation": "margin_percent",
+          "stated_value": 40,
+          "operands": [
+            {"value": 50, "source": "grounded", "source_text": "Gross profit was $50.0 million"},
+            {"value": 125, "source": "grounded", "source_text": "$125.0 million"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "none",
+          "notes": "50/125 = 40%"
+        },
+        {
+          "id": "A3",
+          "claim_text": "Operating income grew 20% year over year",
+          "operation": "percent_change",
+          "stated_value": 20,
+          "operands": [
+            {"value": 25, "source": "grounded", "source_text": "$25.0 million a year ago"},
+            {"value": 30, "source": "grounded", "source_text": "Operating income was $30.0 million"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "operand_order (source states current $30M before prior $25M)",
+          "notes": "(30-25)/25 = 20%"
+        },
+        {
+          "id": "A4",
+          "claim_text": "an increase of $5.0 million",
+          "operation": "absolute_change",
+          "stated_value": 5,
+          "operands": [
+            {"value": 25, "source": "grounded", "source_text": "$25.0 million a year ago"},
+            {"value": 30, "source": "grounded", "source_text": "Operating income was $30.0 million"}
+          ],
+          "unit": "$M",
+          "expected_status": "VERIFIED",
+          "trap": "two claims in one sentence (shares operands with A3 but different operation)",
+          "notes": "30-25 = 5"
+        },
+        {
+          "id": "A5",
+          "claim_text": "Gross profit was 2.5 times operating expenses",
+          "operation": "ratio",
+          "stated_value": 2.5,
+          "operands": [
+            {"value": 50, "source": "grounded", "source_text": "Gross profit was $50.0 million"},
+            {"value": 20, "source": "grounded", "source_text": "Operating expenses were $20.0 million"}
+          ],
+          "unit": null,
+          "expected_status": "VERIFIED",
+          "trap": "none",
+          "notes": "50/20 = 2.5"
+        },
+        {
+          "id": "A6",
+          "claim_text": "Combined domestic and international revenue was $125.0 million",
+          "operation": "sum",
+          "stated_value": 125,
+          "operands": [
+            {"value": 75, "source": "grounded", "source_text": "Domestic revenue was $75.0 million"},
+            {"value": 50, "source": "grounded", "source_text": "international revenue was $50.0 million"}
+          ],
+          "unit": "$M",
+          "expected_status": "VERIFIED",
+          "trap": "none",
+          "notes": "75+50 = 125"
+        },
+        {
+          "id": "A7",
+          "claim_text": "The company ended with $80.0 million in cash",
+          "operation": "identity",
+          "stated_value": 80,
+          "operands": [
+            {"value": 80, "source": "grounded", "source_text": "$80.0 million in cash"}
+          ],
+          "unit": "$M",
+          "expected_status": "VERIFIED",
+          "trap": "none",
+          "notes": "restates a source figure"
+        },
+        {
+          "id": "A8",
+          "claim_text": "strengthened its competitive position in key markets",
+          "operation": "unsupported",
+          "stated_value": null,
+          "operands": [],
+          "unit": null,
+          "expected_status": "UNCHECKED",
+          "trap": "qualitative claim, no arithmetic",
+          "notes": "must be excluded from scoring"
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "name": "Acme Corp — Invoice #4471",
+      "source": "INVOICE #4471 — Acme Corp\n\nLine items:\n  Widgets: 200 units @ $15.00 each\n  Gadgets: 50 units @ $40.00 each\nSubtotal: $5,000.00\nDiscount: $500.00\nTax (10%): $450.00\nTotal due: $4,950.00",
+      "summary": "Invoice #4471 bills Acme Corp for two product lines. Widget revenue was $3,000 (200 units at $15). The subtotal was $5,000. After a $500 discount, the net before tax was $4,500. The $450 tax is 10% of the $4,500 taxable base. The total due is $5,400.",
+      "gold_claims": [
+        {
+          "id": "B1",
+          "claim_text": "Widget revenue was $3,000 (200 units at $15)",
+          "operation": "product",
+          "stated_value": 3000,
+          "operands": [
+            {"value": 200, "source": "grounded", "source_text": "200 units"},
+            {"value": 15, "source": "grounded", "source_text": "$15.00 each"}
+          ],
+          "unit": "$",
+          "expected_status": "VERIFIED",
+          "trap": "none",
+          "notes": "200 x 15 = 3000"
+        },
+        {
+          "id": "B2",
+          "claim_text": "The subtotal was $5,000",
+          "operation": "identity",
+          "stated_value": 5000,
+          "operands": [
+            {"value": 5000, "source": "grounded", "source_text": "Subtotal: $5,000.00"}
+          ],
+          "unit": "$",
+          "expected_status": "VERIFIED",
+          "trap": "thousands separator in source value",
+          "notes": "restates the subtotal line"
+        },
+        {
+          "id": "B3",
+          "claim_text": "After a $500 discount, the net before tax was $4,500",
+          "operation": "difference",
+          "stated_value": 4500,
+          "operands": [
+            {"value": 5000, "source": "grounded", "source_text": "Subtotal: $5,000.00"},
+            {"value": 500, "source": "grounded", "source_text": "Discount: $500.00"}
+          ],
+          "unit": "$",
+          "expected_status": "VERIFIED",
+          "trap": "none",
+          "notes": "5000-500 = 4500"
+        },
+        {
+          "id": "B4",
+          "claim_text": "The $450 tax is 10% of the $4,500 taxable base",
+          "operation": "margin_percent",
+          "stated_value": 10,
+          "operands": [
+            {"value": 450, "source": "grounded", "source_text": "Tax (10%): $450.00"},
+            {"value": 4500, "source": "inferred", "source_text": "Subtotal $5,000.00 minus Discount $500.00"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "inferred operand (4500 is not stated in source; it is 5000-500)",
+          "notes": "450/4500 = 10%; the taxable base must be inferred"
+        },
+        {
+          "id": "B5",
+          "claim_text": "The total due is $5,400",
+          "operation": "identity",
+          "stated_value": 5400,
+          "operands": [
+            {"value": 4950, "source": "grounded", "source_text": "Total due: $4,950.00"}
+          ],
+          "unit": "$",
+          "expected_status": "WRONG_MATH",
+          "trap": "direct misstatement; source total is 4950, summary says 5400",
+          "notes": "identity mismatch"
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "name": "Globex Corp — FY2024 annual highlights",
+      "source": "Globex Corp — FY2024 Annual Highlights\n\nRevenue: $1.2 billion (up from $1.0 billion in FY2023)\nR&D spending: $180 million\nHeadcount: 4,500 employees\nNet income: $240 million\nLargest segment (Cloud): $600 million in revenue",
+      "summary": "Globex grew revenue to $1,200 million in FY2024, a 20% increase over the prior year. Net income of $240 million implied a net margin of 20%. R&D was $180 million, or 15% of revenue. International revenue grew 12% year over year. The Cloud segment, at $600 million, made up 50% of total revenue.",
+      "gold_claims": [
+        {
+          "id": "C1",
+          "claim_text": "Globex grew revenue to $1,200 million in FY2024, a 20% increase over the prior year",
+          "operation": "percent_change",
+          "stated_value": 20,
+          "operands": [
+            {"value": 1000, "source": "inferred", "source_text": "$1.0 billion in FY2023"},
+            {"value": 1200, "source": "inferred", "source_text": "$1.2 billion"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "both operands inferred (billions -> millions conversion)",
+          "notes": "(1200-1000)/1000 = 20%"
+        },
+        {
+          "id": "C2",
+          "claim_text": "Net income of $240 million implied a net margin of 20%",
+          "operation": "margin_percent",
+          "stated_value": 20,
+          "operands": [
+            {"value": 240, "source": "grounded", "source_text": "Net income: $240 million"},
+            {"value": 1200, "source": "inferred", "source_text": "$1.2 billion"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "denominator inferred (billions -> millions)",
+          "notes": "240/1200 = 20%"
+        },
+        {
+          "id": "C3",
+          "claim_text": "R&D was $180 million, or 15% of revenue",
+          "operation": "margin_percent",
+          "stated_value": 15,
+          "operands": [
+            {"value": 180, "source": "grounded", "source_text": "R&D spending: $180 million"},
+            {"value": 1200, "source": "inferred", "source_text": "$1.2 billion"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "denominator inferred",
+          "notes": "180/1200 = 15%"
+        },
+        {
+          "id": "C4",
+          "claim_text": "International revenue grew 12% year over year",
+          "operation": "percent_change",
+          "stated_value": 12,
+          "operands": [
+            {"value": null, "source": "missing", "source_text": null},
+            {"value": null, "source": "missing", "source_text": null}
+          ],
+          "unit": "%",
+          "expected_status": "UNSUPPORTED_NUMBER",
+          "trap": "missing operands (international revenue is absent from source) — must mark missing, not guess",
+          "notes": "discipline test: no international figures in source"
+        },
+        {
+          "id": "C5",
+          "claim_text": "The Cloud segment, at $600 million, made up 50% of total revenue",
+          "operation": "margin_percent",
+          "stated_value": 50,
+          "operands": [
+            {"value": 600, "source": "grounded", "source_text": "Cloud): $600 million in revenue"},
+            {"value": 1200, "source": "inferred", "source_text": "$1.2 billion"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "denominator inferred",
+          "notes": "600/1200 = 50%"
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "name": "Meridian Inc — Cost report",
+      "source": "Meridian Inc — Cost Report\n\nMarketing spend fell to $30 million this year from $40 million last year. Sales: $12 million. Support: $8 million. Engineering: $25 million.",
+      "summary": "Marketing spend dropped 25% to $30 million. Combined Sales and Support costs were $20 million. Total operating costs across the three functions were $50 million.",
+      "gold_claims": [
+        {
+          "id": "D1",
+          "claim_text": "Marketing spend dropped 25% to $30 million",
+          "operation": "percent_change",
+          "stated_value": -25,
+          "operands": [
+            {"value": 40, "source": "grounded", "source_text": "$40 million last year"},
+            {"value": 30, "source": "grounded", "source_text": "$30 million this year"}
+          ],
+          "unit": "%",
+          "expected_status": "VERIFIED",
+          "trap": "sign (decrease -> -25) AND operand_order (source lists new $30M before old $40M)",
+          "notes": "(30-40)/40 = -25%"
+        },
+        {
+          "id": "D2",
+          "claim_text": "Combined Sales and Support costs were $20 million",
+          "operation": "sum",
+          "stated_value": 20,
+          "operands": [
+            {"value": 12, "source": "grounded", "source_text": "Sales: $12 million"},
+            {"value": 8, "source": "grounded", "source_text": "Support: $8 million"}
+          ],
+          "unit": "$M",
+          "expected_status": "VERIFIED",
+          "trap": "none",
+          "notes": "12+8 = 20"
+        },
+        {
+          "id": "D3",
+          "claim_text": "Total operating costs across the three functions were $50 million",
+          "operation": "sum",
+          "stated_value": 50,
+          "operands": [
+            {"value": 12, "source": "grounded", "source_text": "Sales: $12 million"},
+            {"value": 8, "source": "grounded", "source_text": "Support: $8 million"},
+            {"value": 25, "source": "grounded", "source_text": "Engineering: $25 million"}
+          ],
+          "unit": "$M",
+          "expected_status": "WRONG_MATH",
+          "trap": "wrong sum; 12+8+25 = 45, summary says 50",
+          "notes": "three functions = Sales+Support+Engineering"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# Aritiq local backend
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2
+python-dotenv>=1.0   # loads your .env (BYOK settings) — see .env.example
+certifi>=2023.7.22   # CA bundle for verifying sec.gov TLS (SEC EDGAR fetch)
+
+# Optional model backends for auditing CUSTOM documents (the bundled examples
+# replay without any key). Install ONLY the one matching ARITIQ_PROVIDER:
+#   pip install anthropic        # ARITIQ_PROVIDER=anthropic (default)
+#   pip install openai           # ARITIQ_PROVIDER=openai (also used for groq)
+#   pip install google-genai     # ARITIQ_PROVIDER=gemini

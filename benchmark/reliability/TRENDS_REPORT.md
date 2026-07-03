@@ -1,0 +1,92 @@
+# Multi-period trend verification (XBRL-grounded)
+
+- Filers: 83 (83 with usable multi-year series)
+- Verdict totals: `{'VERIFIED': 429, 'WRONG_MATH': 405}`
+- Positive controls (real claims that must VERIFY): **499/499** (100.0%)
+- Negative controls (wrong claims that must be caught as WRONG_MATH): **335/335** (100.0%)
+
+| Ticker | Series (concept: points, dropped) | Claims | pos | neg |
+|---|---|---|---|---|
+| AMD | revenue: 10pt/24drop; net_income: 16pt/64drop | 10 | 6/6 | 4/4 |
+| PLTR | revenue: 8pt/0drop; net_income: 8pt/0drop | 14 | 8/8 | 6/6 |
+| AAPL | revenue: 9pt/16drop; net_income: 19pt/88drop | 10 | 6/6 | 4/4 |
+| MSFT | revenue: 10pt/24drop; net_income: 18pt/92drop | 12 | 7/7 | 5/5 |
+| NVDA | revenue: 6pt/16drop; net_income: 19pt/81drop | 10 | 6/6 | 4/4 |
+| TSLA | revenue: 6pt/0drop; net_income: 17pt/75drop | 6 | 4/4 | 2/2 |
+| GOOGL | revenue: 9pt/0drop; net_income: 13pt/0drop | 12 | 7/7 | 5/5 |
+| AMZN | revenue: 10pt/24drop; net_income: 19pt/88drop | 12 | 7/7 | 5/5 |
+| META | revenue: 10pt/0drop; net_income: 16pt/3drop | 8 | 5/5 | 3/3 |
+| INTC | revenue: 10pt/0drop; net_income: 19pt/0drop | 10 | 6/6 | 4/4 |
+| JPM | revenue: 19pt/0drop; net_income: 19pt/0drop | 10 | 6/6 | 4/4 |
+| BAC | revenue: 19pt/0drop; net_income: 19pt/0drop | 12 | 7/7 | 5/5 |
+| WFC | revenue: 4pt/0drop; net_income: 19pt/0drop | 8 | 5/5 | 3/3 |
+| GS | revenue: 0pt/0drop; net_income: 21pt/1drop | 5 | 3/3 | 2/2 |
+| KO | revenue: 10pt/0drop; net_income: 19pt/0drop | 12 | 7/7 | 5/5 |
+| PG | revenue: 12pt/16drop; net_income: 18pt/88drop | 12 | 7/7 | 5/5 |
+| JNJ | revenue: 10pt/24drop; net_income: 16pt/88drop | 12 | 7/7 | 5/5 |
+| PFE | revenue: 8pt/0drop; net_income: 19pt/0drop | 6 | 4/4 | 2/2 |
+| MRK | revenue: 14pt/0drop; net_income: 19pt/0drop | 12 | 7/7 | 5/5 |
+| XOM | revenue: 5pt/0drop; net_income: 19pt/0drop | 8 | 5/5 | 3/3 |
+| CVX | revenue: 8pt/0drop; net_income: 19pt/0drop | 6 | 4/4 | 2/2 |
+| BA | revenue: 3pt/0drop; net_income: 19pt/88drop | 8 | 5/5 | 3/3 |
+| GE | revenue: 3pt/32drop; net_income: 19pt/112drop | 12 | 7/7 | 5/5 |
+| DIS | revenue: 9pt/16drop; net_income: 9pt/16drop | 12 | 7/7 | 5/5 |
+| NFLX | revenue: 19pt/85drop; net_income: 19pt/81drop | 12 | 7/7 | 5/5 |
+| CRM | revenue: 10pt/16drop; net_income: 19pt/80drop | 12 | 7/7 | 5/5 |
+| ORCL | revenue: 10pt/0drop; net_income: 19pt/0drop | 14 | 8/8 | 6/6 |
+| CSCO | revenue: 9pt/16drop; net_income: 18pt/48drop | 8 | 5/5 | 3/3 |
+| T | revenue: 19pt/99drop; net_income: 19pt/75drop | 10 | 6/6 | 4/4 |
+| VZ | revenue: 19pt/80drop; net_income: 19pt/80drop | 8 | 5/5 | 3/3 |
+| BRK-B | revenue: 8pt/0drop; net_income: 19pt/88drop | 6 | 4/4 | 2/2 |
+| PGR | revenue: 19pt/0drop; net_income: 19pt/0drop | 12 | 7/7 | 5/5 |
+| MET | revenue: 8pt/0drop; net_income: 19pt/96drop | 10 | 6/6 | 4/4 |
+| AIG | revenue: 19pt/72drop; net_income: 19pt/80drop | 10 | 6/6 | 4/4 |
+| PLD | revenue: 10pt/64drop; net_income: 17pt/0drop | 10 | 6/6 | 4/4 |
+| AMT | revenue: 8pt/0drop; net_income: 14pt/80drop | 8 | 5/5 | 3/3 |
+| SPG | revenue: 19pt/132drop; net_income: 19pt/112drop | 12 | 7/7 | 5/5 |
+| O | revenue: 3pt/0drop; net_income: 18pt/8drop | 12 | 7/7 | 5/5 |
+| NEE | revenue: 6pt/24drop; net_income: 18pt/76drop | 6 | 4/4 | 2/2 |
+| DUK | revenue: 6pt/16drop; net_income: 19pt/84drop | 10 | 6/6 | 4/4 |
+| SO | revenue: 19pt/80drop; net_income: 3pt/16drop | 8 | 5/5 | 3/3 |
+| CAT | revenue: 19pt/88drop; net_income: 4pt/8drop | 10 | 6/6 | 4/4 |
+| HON | revenue: 10pt/32drop; net_income: 19pt/96drop | 8 | 5/5 | 3/3 |
+| RTX | revenue: 5pt/0drop; net_income: 19pt/88drop | 12 | 7/7 | 5/5 |
+| F | revenue: 10pt/0drop; net_income: 13pt/48drop | 12 | 7/7 | 5/5 |
+| ETSY | revenue: 10pt/0drop; net_income: 13pt/0drop | 10 | 6/6 | 4/4 |
+| RIVN | revenue: 7pt/0drop; net_income: 7pt/0drop | 12 | 7/7 | 5/5 |
+| ROKU | revenue: 10pt/24drop; net_income: 11pt/24drop | 12 | 7/7 | 5/5 |
+| DDOG | revenue: 9pt/0drop; net_income: 9pt/1drop | 10 | 6/6 | 4/4 |
+| U | revenue: 8pt/0drop; net_income: 8pt/0drop | 10 | 6/6 | 4/4 |
+| EQIX | revenue: 7pt/0drop; net_income: 18pt/77drop | 12 | 7/7 | 5/5 |
+| DLR | revenue: 17pt/80drop; net_income: 17pt/80drop | 12 | 7/7 | 5/5 |
+| VICI | revenue: 8pt/14drop; net_income: 9pt/15drop | 14 | 8/8 | 6/6 |
+| WELL | revenue: 5pt/0drop; net_income: 3pt/0drop | 12 | 7/7 | 5/5 |
+| AVB | revenue: 10pt/0drop; net_income: 14pt/0drop | 8 | 5/5 | 3/3 |
+| BXP | revenue: 19pt/72drop; net_income: 19pt/64drop | 12 | 7/7 | 5/5 |
+| CCI | revenue: 10pt/11drop; net_income: 14pt/65drop | 10 | 6/6 | 4/4 |
+| TRV | revenue: 19pt/88drop; net_income: 13pt/48drop | 12 | 7/7 | 5/5 |
+| ALL | revenue: 19pt/128drop; net_income: 17pt/16drop | 12 | 7/7 | 5/5 |
+| PRU | revenue: 19pt/96drop; net_income: 19pt/96drop | 8 | 5/5 | 3/3 |
+| AFL | revenue: 19pt/96drop; net_income: 18pt/0drop | 6 | 4/4 | 2/2 |
+| CB | revenue: 19pt/80drop; net_income: 19pt/80drop | 12 | 7/7 | 5/5 |
+| SCHW | revenue: 19pt/88drop; net_income: 19pt/88drop | 10 | 6/6 | 4/4 |
+| BRK-A | revenue: 8pt/0drop; net_income: 19pt/88drop | 6 | 4/4 | 2/2 |
+| HEI | revenue: 9pt/0drop; net_income: 18pt/80drop | 14 | 8/8 | 6/6 |
+| LEN | revenue: 18pt/80drop; net_income: 18pt/80drop | 6 | 4/4 | 2/2 |
+| UHAL | revenue: 5pt/0drop; net_income: 17pt/0drop | 10 | 6/6 | 4/4 |
+| GEV | revenue: 4pt/0drop; net_income: 4pt/0drop | 14 | 8/8 | 6/6 |
+| SOLV | revenue: 4pt/0drop; net_income: 4pt/0drop | 12 | 7/7 | 5/5 |
+| KVUE | revenue: 5pt/8drop; net_income: 5pt/8drop | 8 | 5/5 | 3/3 |
+| CARR | revenue: 8pt/16drop; net_income: 4pt/0drop | 6 | 4/4 | 2/2 |
+| FOXA | revenue: 6pt/0drop; net_income: 9pt/0drop | 10 | 6/6 | 4/4 |
+| PSKY | revenue: 2pt/2drop; net_income: 2pt/2drop | 10 | 6/6 | 4/4 |
+| BBWI | revenue: 9pt/32drop; net_income: 19pt/104drop | 8 | 5/5 | 3/3 |
+| W | revenue: 10pt/0drop; net_income: 14pt/0drop | 10 | 6/6 | 4/4 |
+| CVNA | revenue: 9pt/16drop; net_income: 11pt/32drop | 10 | 6/6 | 4/4 |
+| AFRM | revenue: 7pt/0drop; net_income: 7pt/0drop | 12 | 7/7 | 5/5 |
+| RKT | revenue: 0pt/0drop; net_income: 8pt/8drop | 3 | 2/2 | 1/1 |
+| UNH | revenue: 19pt/32drop; net_income: 19pt/32drop | 10 | 6/6 | 4/4 |
+| HCA | revenue: 7pt/0drop; net_income: 17pt/72drop | 12 | 7/7 | 5/5 |
+| UNP | revenue: 7pt/0drop; net_income: 19pt/88drop | 10 | 6/6 | 4/4 |
+| DAL | revenue: 10pt/8drop; net_income: 17pt/72drop | 12 | 7/7 | 5/5 |
+| UPS | revenue: 10pt/24drop; net_income: 19pt/88drop | 8 | 5/5 | 3/3 |

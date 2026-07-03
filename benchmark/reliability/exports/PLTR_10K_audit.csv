@@ -1,0 +1,11 @@
+# ticker: PLTR
+# form: 10-K
+# period_end: 2025-12-31
+# company: Palantir Technologies Inc.
+# n_claims: 4
+# source: XBRL-grounded (SEC companyfacts)
+row,claim_text,operation,rule_name,eps_variant,operands,operand_sources,stated_value,verdict,recomputed_value,delta,caused_by,explanation,source_text,run_timestamp
+1,[XBRL] PLTR balance sheet identity,internal_consistency,balance_sheet_identity,,8900392000 | 1412381000 | 7488011000,total_assets; XBRL Assets [grounded]; total_liabilities; XBRL Liabilities [grounded]; total_equity; XBRL StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest [grounded],,VERIFIED,8900392000,0,,[balance_sheet_identity] within tolerance,"XBRL tags: Assets, Liabilities, StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",2026-07-01T01:39:57+00:00
+2,[XBRL] PLTR basic EPS reconciliation,internal_consistency,eps_reconciliation,basic,0.69 | 1625033000 | 2369612000,basic; XBRL EarningsPerShareBasic [grounded]; total; XBRL NetIncomeLoss [grounded]; basic; XBRL WeightedAverageNumberOf...Basic [grounded],,VERIFIED,0.68578,0.0042198,,[eps_reconciliation] within tolerance,"XBRL tags: EarningsPerShareBasic, NetIncomeLoss, shares Basic",2026-07-01T01:39:57+00:00
+3,[XBRL] PLTR diluted EPS reconciliation,internal_consistency,eps_reconciliation,diluted,0.63 | 1625033000 | 2565197000,diluted; XBRL EarningsPerShareDiluted [grounded]; total; XBRL NetIncomeLoss [grounded]; diluted; XBRL WeightedAverageNumberOf...Diluted [grounded],,VERIFIED,0.633492,-0.00349248,,[eps_reconciliation] within tolerance,"XBRL tags: EarningsPerShareDiluted, NetIncomeLoss, shares Diluted",2026-07-01T01:39:57+00:00
+4,[XBRL] PLTR cash tie-out,internal_consistency,cash_flow_tie_out,,1451425000 | 1423796000,statement_ending_cash; XBRL CashCashEquivalentsRestrictedCash... [grounded]; balance_sheet_cash; XBRL CashAndCashEquivalentsAtCarryingValue [grounded],,INSUFFICIENT_EVIDENCE,,,,"[cash_flow_tie_out] cash_flow_tie_out not run: a restricted-cash disclosure was detected, so the cash-flow ending cash (which may include restricted cash) and the balance-sheet unrestricted cash line are not expected to be equal. A human should reconcile them.",XBRL cash tags,2026-07-01T01:39:57+00:00

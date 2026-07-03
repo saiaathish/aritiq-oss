@@ -1,0 +1,11 @@
+# ticker: AAPL
+# form: 10-K
+# period_end: 2025-09-27
+# company: Apple Inc.
+# n_claims: 4
+# source: XBRL-grounded (SEC companyfacts)
+row,claim_text,operation,rule_name,eps_variant,operands,operand_sources,stated_value,verdict,recomputed_value,delta,caused_by,explanation,source_text,run_timestamp
+1,[XBRL] AAPL balance sheet identity,internal_consistency,balance_sheet_identity,,359241000000 | 285508000000 | 73733000000,total_assets; XBRL Assets [grounded]; total_liabilities; XBRL Liabilities [grounded]; total_equity; XBRL StockholdersEquity [grounded],,VERIFIED,359241000000,0,,[balance_sheet_identity] within tolerance,"XBRL tags: Assets, Liabilities, StockholdersEquity",2026-07-01T01:39:57+00:00
+2,[XBRL] AAPL basic EPS reconciliation,internal_consistency,eps_reconciliation,basic,7.49 | 112010000000 | 14948500000,basic; XBRL EarningsPerShareBasic [grounded]; total; XBRL NetIncomeLoss [grounded]; basic; XBRL WeightedAverageNumberOf...Basic [grounded],,VERIFIED,7.49306,-0.0030595,,[eps_reconciliation] within tolerance,"XBRL tags: EarningsPerShareBasic, NetIncomeLoss, shares Basic",2026-07-01T01:39:57+00:00
+3,[XBRL] AAPL diluted EPS reconciliation,internal_consistency,eps_reconciliation,diluted,7.46 | 112010000000 | 15004697000,diluted; XBRL EarningsPerShareDiluted [grounded]; total; XBRL NetIncomeLoss [grounded]; diluted; XBRL WeightedAverageNumberOf...Diluted [grounded],,VERIFIED,7.465,-0.00499579,,[eps_reconciliation] within tolerance,"XBRL tags: EarningsPerShareDiluted, NetIncomeLoss, shares Diluted",2026-07-01T01:39:57+00:00
+4,[XBRL] AAPL cash tie-out,internal_consistency,cash_flow_tie_out,,35934000000 | 35934000000,statement_ending_cash; XBRL CashCashEquivalentsRestrictedCash... [grounded]; balance_sheet_cash; XBRL CashAndCashEquivalentsAtCarryingValue [grounded],,VERIFIED,35934000000,0,,[cash_flow_tie_out] within tolerance,XBRL cash tags,2026-07-01T01:39:57+00:00

@@ -1,0 +1,43 @@
+# Secrets — never commit
+.env
+.env.*
+*.env
+.env.local
+**/.env.local
+*.key
+*_secret*
+
+# ...but DO track the BYOK templates so users know what to fill in.
+!.env.example
+!**/.env.local.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Node / Next.js (frontend)
+node_modules/
+.next/
+out/
+dist/
+npm-debug.log*
+yarn-debug.log*
+
+# Benchmark run artifacts may contain fetched filing text; keep caches local
+benchmark/reliability/cache/runs/*.json
+benchmark/reliability/cache/runs/*_review.csv
+
+# Large, deterministically re-fetchable SEC caches — NOT committed (repo hygiene).
+# Regenerate with the harness; see benchmark/reliability/cache/README.md.
+#   - raw companyfacts JSON (~321 MB across the benchmark set)
+#   - stripped 10-K filing text
+# The small STRUCTURED caches (extractions/, sic/) ARE tracked: they are compact
+# fixtures the offline test suite and demos rely on.
+benchmark/reliability/cache/xbrl/
+benchmark/reliability/cache/filings/
+tsconfig.tsbuildinfo
+*.tsbuildinfo

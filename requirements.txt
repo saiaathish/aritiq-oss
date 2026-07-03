@@ -1,0 +1,19 @@
+# Core
+pydantic>=2          # strict validation of extracted claims
+certifi>=2023.7.22   # CA bundle for verifying sec.gov TLS (SEC EDGAR fetch)
+python-dotenv>=1.0   # loads your .env (BYOK settings) — see .env.example
+
+# Local API server (backend/app.py + the Next.js UI talk to this)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+
+# Dev / test
+pytest>=7
+
+# Model backends (BYOK) — install ONLY the one matching ARITIQ_PROVIDER.
+# None of these are needed for the verifier, the tests, or the offline
+# replay demo, which run without any model or key.
+#   anthropic ->  pip install anthropic
+#   openai    ->  pip install openai
+#   gemini    ->  pip install google-genai
+#   groq      ->  pip install openai        (Groq uses the OpenAI-compatible API)
