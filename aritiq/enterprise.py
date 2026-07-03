@@ -1,9 +1,9 @@
 """
-Minimal Phase 4 enterprise layer for Aritiq.
+Local persistence layer for Aritiq.
 
-This module is deliberately outside ``aritiq/core``. It stores identity,
-API-key, audit-history, watchlist, and webhook delivery state. It does not
-verify financial claims and does not import any model SDK.
+This module is deliberately outside ``aritiq/core``. It stores a single local
+workspace plus audit history in a SQLite file under your XDG state dir. It does
+not verify financial claims and does not import any model SDK.
 """
 
 from __future__ import annotations
@@ -154,15 +154,6 @@ def init_db(conn: sqlite3.Connection) -> None:
         );
         """
     )
-    # Migration: per-user isolation for Supabase-authenticated users. Each
-    # Supabase account gets its own org+user keyed by the token's `sub`.
-    cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
-    if "supabase_sub" not in cols:
-        conn.execute("ALTER TABLE users ADD COLUMN supabase_sub TEXT")
-    conn.execute(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_supabase_sub "
-        "ON users(supabase_sub) WHERE supabase_sub IS NOT NULL"
-    )
     conn.commit()
 
 
@@ -229,60 +220,6 @@ def ensure_default_workspace(conn: sqlite3.Connection) -> AuthContext:
         api_key_prefix="legacy",
         limit_per_minute=DEFAULT_LIMIT_PER_MINUTE,
         source="legacy",
-    )
-
-
-def ensure_supabase_workspace(
-    conn: sqlite3.Connection,
-    sub: str,
-    email: Optional[str] = None,
-    name: Optional[str] = None,
-) -> AuthContext:
-    """Org + user for one Supabase account, keyed by the token's `sub`.
-
-    Unlike ``ensure_default_workspace`` (a shared local-dev workspace), this
-    isolates each signed-in user's audit history in their own org, so
-    ``store_audit`` / ``list_audits`` never commingle users' data.
-    """
-    if not sub:
-        raise ValueError("supabase sub is required")
-    now = utc_now()
-    row = conn.execute(
-        "SELECT id, org_id FROM users WHERE supabase_sub = ?", (sub,)
-    ).fetchone()
-    if row:
-        user_id, org_id = int(row["id"]), int(row["org_id"])
-        if email:
-            conn.execute(
-                "UPDATE users SET email = ? WHERE id = ? AND email != ?",
-                (email.strip().lower(), user_id, email.strip().lower()),
-            )
-    else:
-        cur = conn.execute(
-            "INSERT INTO orgs(name, created_at) VALUES(?, ?)",
-            ((email or f"user-{sub[:8]}").strip().lower(), now),
-        )
-        org_id = int(cur.lastrowid)
-        cur = conn.execute(
-            "INSERT INTO users(org_id, email, name, created_at, supabase_sub) "
-            "VALUES(?, ?, ?, ?, ?)",
-            (
-                org_id,
-                (email or f"{sub}@supabase.local").strip().lower(),
-                name,
-                now,
-                sub,
-            ),
-        )
-        user_id = int(cur.lastrowid)
-    conn.commit()
-    return AuthContext(
-        org_id=org_id,
-        user_id=user_id,
-        api_key_id=None,
-        api_key_prefix="supabase",
-        limit_per_minute=DEFAULT_LIMIT_PER_MINUTE,
-        source="supabase",
     )
 
 

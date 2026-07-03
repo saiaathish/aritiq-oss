@@ -12,14 +12,14 @@ extractor never sees a verdict.  Read top to bottom: the LLM output crosses into
 verification as plain data, nothing more.
 
 Two entry points:
-  * audit(source, summary)            — single-document (Phase 1/2).
-  * audit_documents(documents, summary) — multi-document (Phase 3): builds a
+  * audit(source, summary)            — single-document (single-document).
+  * audit_documents(documents, summary) — multi-document (multi-document): builds a
     registry, routes grounding per document, and surfaces cross-document
     CONFLICT verdicts with restatement-disclosure classification.
 
 Both share one tail (_verify_propagate_score): verify each claim independently,
-propagate root failures through the dependency graph (Move 1), then score with
-dependency weighting (Move 3).  The verifier remains model-free throughout.
+propagate root failures through the dependency graph (the provenance graph), then score with
+dependency weighting (the weighted score).  The verifier remains model-free throughout.
 """
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ class AuditResult:
     raw_response: str = ""
     provider: str = ""
     model: str = ""
-    # ---- Phase 3: cross-document conflict verdicts (may be empty) ----------
+    # ---- multi-document: cross-document conflict verdicts (may be empty) ----------
     # Surfaced separately so the UI can render "two filings disagree" distinctly
     # from per-claim arithmetic verdicts.  These are ALSO included in `results`
     # (so they count toward the score) — this list is a convenience view.
@@ -100,9 +100,9 @@ def audit(
     Two extraction passes, both behind the same firewall (only Claim objects
     cross into the deterministic verifier):
 
-      1. SUMMARY AUDIT (Phase 1): trace the numeric claims in `summary` back to
+      1. SUMMARY AUDIT (summary-audit): trace the numeric claims in `summary` back to
          `source` and recompute them.
-      2. CROSS-STATEMENT (Phase 2): check whether `source`'s own numbers agree
+      2. CROSS-STATEMENT (cross-statement): check whether `source`'s own numbers agree
          with each other (balance sheet balances, EPS reconciles, cash ties).
          Runs when `check_internal_consistency` is True (the default) and the
          document actually supports a rule — if not, it simply contributes zero
@@ -113,7 +113,7 @@ def audit(
     dedicated `cs_complete_fn` for the cross-statement pass. If `complete_fn` is
     given (Phase-1 replay) but `cs_complete_fn` is not, the cross-statement pass
     is skipped rather than fed the wrong fixture — keeping existing behavior and
-    every Phase 1 test byte-for-byte identical.
+    every per-claim test byte-for-byte identical.
 
     Pass `complete_fn=None` (the live path) to use the default backend selected
     by provider/model for BOTH passes.
@@ -126,7 +126,7 @@ def audit(
     claims: List[Claim] = list(extraction.claims)
     issues: List[ExtractionIssue] = list(extraction.issues)
 
-    # ---- Phase 2: cross-statement consistency on the SOURCE document ----------
+    # ---- cross-statement: cross-statement consistency on the SOURCE document ----------
     # Decide whether to run, and with which completion backend:
     #   * live path (complete_fn is None): reuse the default backend.
     #   * replay path (complete_fn given): only run if a dedicated cs fixture is
@@ -202,23 +202,23 @@ def _verify_propagate_score(
     AFTER propagation (a CONFLICT is not a graph-propagated consequence) and
     BEFORE scoring (so a source disagreement lowers the trust score).
     """
-    # Each claim is verified INDEPENDENTLY (Phase 1/2 logic, unchanged).
+    # Each claim is verified INDEPENDENTLY (per-claim logic, unchanged).
     results = [
         verify_claim(claim, pct_tolerance=pct_tolerance, rel_tolerance=rel_tolerance)
         for claim in claims
     ]
 
-    # ---- Phase 3 / Move 1: provenance-graph propagation -----------------------
+    # ---- the provenance graph: provenance-graph propagation -----------------------
     # Walk the depends_on graph and relabel downstream consequences of any root
     # failure as PROPAGATED_ERROR.  Pure graph code; leaf claims pass through
-    # untouched, so Phase 1/2 inputs behave exactly as before.
+    # untouched, so single-document inputs behave exactly as before.
     results = propagate_errors(results)
 
     # ---- Cross-document CONFLICT verdicts (already-built) ---------------------
     if extra_results:
         results = list(results) + list(extra_results)
 
-    # ---- Phase 3 / Move 3: dependency-weighted score --------------------------
+    # ---- multi-document / the weighted score: dependency-weighted score --------------------------
     # compute_score reports BOTH the dependency-weighted score and the flat one.
     # When there is no graph structure, the weighted score degrades exactly to
     # the flat one.
@@ -240,7 +240,7 @@ def audit_documents(
     detect_conflicts: bool = True,
     cf_complete_fn: Optional[CompletionFn] = None,
 ) -> AuditResult:
-    """Audit a summary against MULTIPLE labeled source documents (Phase 3).
+    """Audit a summary against MULTIPLE labeled source documents (multi-document).
 
     This is the multi-filing path the single-string `audit()` could not express.
     It does three things `audit()` does not:
@@ -284,7 +284,7 @@ def audit_documents(
             tables=cells,
         ))
 
-    # ---- Summary grounding pass (Phase 1) ------------------------------------
+    # ---- Summary grounding pass (summary-audit) ------------------------------------
     # The summary may reference any filing, so it sees all document text. We tag
     # each document with its id/period so the extractor can route a fiscal-year
     # claim to the correct figure rather than first-match.
@@ -296,7 +296,7 @@ def audit_documents(
     claims: List[Claim] = list(extraction.claims)
     issues: List[ExtractionIssue] = list(extraction.issues)
 
-    # ---- Per-document cross-statement (Phase 2) ------------------------------
+    # ---- Per-document cross-statement (cross-statement) ------------------------------
     run_cs = check_internal_consistency and (complete_fn is None or cs_complete_fn is not None)
     if run_cs:
         for d in documents:

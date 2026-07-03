@@ -1,5 +1,5 @@
 """
-AI Analyst Mode — Phase 3 item 3. The ONE place a model touches user-facing
+AI Analyst Mode — analyst mode. The ONE place a model touches user-facing
 output, built so it cannot quietly undermine "the verifier contains no model".
 
 THE HARD BOUNDARY (each layer deterministic, each tested):

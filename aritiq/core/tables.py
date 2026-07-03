@@ -179,7 +179,7 @@ def find_cell(
 # ---------------------------------------------------------------------------
 
 # Canonical money scale used across Aritiq operands: millions ($M).
-# (Phase 1 prompt already normalizes prose money to "$M"; we match that so a
+# (summary-audit prompt already normalizes prose money to "$M"; we match that so a
 # table-grounded operand and a prose-grounded operand are directly comparable.)
 _SUFFIX_TO_MILLIONS = {
     "k": 1e-3, "thousand": 1e-3, "thousands": 1e-3,

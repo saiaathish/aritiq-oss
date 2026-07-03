@@ -1,6 +1,6 @@
 """
 Strict JSON contract for LLM-extracted claims, plus the conversion bridge to
-the Day 1 verifier schema.
+the core verifier schema.
 
 Design rules (these are deliberate):
 
@@ -119,7 +119,7 @@ class RawOperand(BaseModel):
     source_text: Optional[str] = None   # verbatim string located in the SOURCE doc
     source_span: Optional[List[int]] = None  # [start, end] char offsets, if known
 
-    # ---- Phase 2 optional provenance (default off; Phase 1 ignores these) --
+    # ---- cross-statement optional provenance (default off; summary-audit ignores these) --
     doc_id: Optional[str] = None        # §2.2 which registry doc this came from
     category: Optional[str] = None      # Axis C: inferred category / EPS variant tag
     category_scheme_version: Optional[str] = None  # §7 categorization version stamp
@@ -157,14 +157,14 @@ class RawClaim(BaseModel):
     source_text: Optional[str] = None
     notes: Optional[str] = None
 
-    # ---- Phase 2 optional fields (default None; Phase 1 claims never set) --
+    # ---- cross-statement optional fields (default None; summary-audit claims never set) --
     rule_name: Optional[str] = None              # §3.3 internal-consistency rule
     eps_variant: Optional[EPSVariant] = None     # §4 basic / diluted
     trend_dir: Optional[TrendDir] = None         # §3.2 up / down / flat
     superlative: Optional[Superlative] = None    # §3.2 max / min
     params: dict = {}                            # operation-specific extras (series, mode, ...)
 
-    # ---- Phase 3 provenance graph fields -------------------------------
+    # ---- multi-document provenance graph fields -------------------------------
     node_id: Optional[str] = None
     depends_on: List[str] = []
 
@@ -217,7 +217,7 @@ class ExtractionIssue:
 
 
 # ---------------------------------------------------------------------------
-# Conversion: validated RawClaim -> Day 1 Claim dataclass
+# Conversion: validated RawClaim -> core Claim dataclass
 # ---------------------------------------------------------------------------
 
 def _raw_to_operand(ro: RawOperand) -> Operand:

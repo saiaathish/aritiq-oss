@@ -7,6 +7,10 @@
 *.key
 *_secret*
 
+# ...but DO track the BYOK templates so users know what to fill in.
+!.env.example
+!**/.env.local.example
+
 # Python
 __pycache__/
 *.py[cod]

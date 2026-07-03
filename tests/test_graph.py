@@ -1,5 +1,5 @@
 """
-Phase 3 / Move 1 test suite — provenance graph + propagated error.
+the provenance graph test suite — provenance graph + propagated error.
 
 Day-1-style discipline: constructed ground truth, no LLM, no API key. The graph
 logic is pure code over depends_on edges, so these tests pin exact propagation
@@ -90,7 +90,7 @@ class TestDAGConstruction:
 
 
 # ===========================================================================
-# Propagation — the core Move 1 behavior
+# Propagation — the core the provenance graph behavior
 # ===========================================================================
 
 class TestPropagation:
@@ -214,7 +214,7 @@ class TestNegativeNoFalseGrouping:
         assert all(r.status != VerificationStatus.PROPAGATED_ERROR for r in out.values())
 
     def test_claims_without_node_ids_pass_through(self):
-        # Phase 1/2 claims have no node_id and no depends_on — untouched.
+        # single-document claims have no node_id and no depends_on — untouched.
         r = VerificationResult(
             claim=Claim(claim_text="legacy", operation=Operation.PERCENT_CHANGE,
                         stated_value=10.0,

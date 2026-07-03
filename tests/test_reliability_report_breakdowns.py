@@ -24,6 +24,13 @@ import report  # noqa: E402
 FIXTURE = os.path.join(_REPO, "benchmark", "reliability", "cache", "runs",
                        "run_1782874387.json")
 
+# This large benchmark run is a local cache artifact (git-ignored, regenerated
+# by the reliability harness), so skip these checks when it isn't present.
+pytestmark = pytest.mark.skipif(
+    not os.path.exists(FIXTURE),
+    reason="reliability run cache not present (regenerate with the harness)",
+)
+
 
 @pytest.fixture(scope="module")
 def run():

@@ -1,7 +1,7 @@
 """
-Phase 2 firewall test — the moat got WIDER, not SMARTER.
+extraction/verification firewall test — the moat got WIDER, not SMARTER.
 
-The entire Aritiq thesis is that no model sits in the verification path. Phase 2
+The entire Aritiq thesis is that no model sits in the verification path. cross-statement
 added a lot of new verification code (rules.py, registry.py, tables.py) and two
 new statuses. This test pins, at the AST level, that none of that new code
 reaches for an LLM — so a reviewer (or a YC partner) can trust the claim without
@@ -24,7 +24,7 @@ VERIFICATION_PATH = [
     os.path.join("aritiq", "core", "score.py"),
     os.path.join("aritiq", "core", "registry.py"),
     os.path.join("aritiq", "core", "tables.py"),
-    # ---- Phase 3 additions: still pure, still in the firewall ----
+    # ---- multi-document additions: still pure, still in the firewall ----
     os.path.join("aritiq", "core", "graph.py"),
     os.path.join("aritiq", "core", "restatement.py"),
     os.path.join("aritiq", "core", "conflicts.py"),
@@ -66,7 +66,7 @@ def test_rules_module_is_pure_functions_only():
 
 
 def test_every_new_operation_has_a_verifier_branch():
-    """Each Phase 2 Operation must be handled by the verifier (no silent
+    """Each cross-statement Operation must be handled by the verifier (no silent
     fall-through to a wrong default). This guards the §3.1 discipline: every
     operation we added is something code actually verifies."""
     from aritiq.core.schema import (
@@ -74,7 +74,7 @@ def test_every_new_operation_has_a_verifier_branch():
     )
     from aritiq.core.verify import verify_claim, _PHASE2_OPERATIONS
 
-    # Every Phase 2 operation must be in the dispatch set.
+    # Every cross-statement operation must be in the dispatch set.
     expected = {
         Operation.INTERNAL_CONSISTENCY, Operation.TREND_DIRECTION,
         Operation.SUPERLATIVE, Operation.CONSECUTIVE_COUNT,

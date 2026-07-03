@@ -1,6 +1,7 @@
 """
-Aritiq Day 1 demo — shows the verifier running on a realistic set of claims
-extracted from a fictional earnings summary, and prints the Aritiq Score.
+Aritiq verifier demo — runs the deterministic verifier on a realistic set of
+claims extracted from a fictional earnings summary, and prints the Aritiq Score.
+No API key needed: this exercises the verifier only.
 
 Run:  python demo.py
 """

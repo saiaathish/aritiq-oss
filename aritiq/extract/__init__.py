@@ -3,7 +3,7 @@ Aritiq extraction package — the ONLY place an LLM runs.
 
 This package turns messy prose (a source document + an AI-generated summary)
 into structured, schema-valid Claim objects.  It is firewalled from the
-verifier: it imports the Day 1 schema to *produce* Claim objects, but it never
+verifier: it imports the core schema to *produce* Claim objects, but it never
 imports or calls verify.py, and verify.py never imports anything from here.
 
     LLM parses (here)  →  code verifies (aritiq.core.verify)
@@ -41,7 +41,7 @@ __all__ = [
     "ExtractionOutput",
     "extract_claims",
     "CompletionFn",
-    # Phase 2 cross-statement extraction
+    # cross-statement cross-statement extraction
     "extract_internal_consistency",
     "CROSS_STATEMENT_SYSTEM_PROMPT",
     "RULE_REQUIREMENTS",

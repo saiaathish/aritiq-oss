@@ -1,12 +1,12 @@
 """
-Multi-document pipeline test suite (Phase 3 wiring).
+Multi-document pipeline test suite (multi-document wiring).
 
 This pins the FIX for the cross-document grounding failure: `audit_documents`
 builds a registry, routes per-document, and surfaces cross-document CONFLICTs.
 
 Everything runs offline via injected completion functions (no LLM, no API key):
-  * `summary_fn`  — the Phase 1 summary-grounding pass.
-  * `cs_fn`       — the Phase 2 per-document cross-statement pass; it returns
+  * `summary_fn`  — the summary-audit summary-grounding pass.
+  * `cs_fn`       — the cross-statement per-document cross-statement pass; it returns
                     DIFFERENT claims depending on which document it is handed,
                     which is exactly the per-document routing the bug lacked.
 

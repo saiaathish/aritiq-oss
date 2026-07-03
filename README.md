@@ -88,7 +88,7 @@ The ingestion is pure Python (`aritiq/edgar/`): `ticker → CIK → latest 10-K 
 
 ### Supported operations
 
-**Phase 1 — arithmetic on a single document:**
+**Core arithmetic operations (single document):**
 
 | Operation | Formula | Notes |
 |---|---|---|
@@ -102,7 +102,7 @@ The ingestion is pure Python (`aritiq/edgar/`): `ticker → CIK → latest 10-K 
 | `product` | a × b × … | |
 | `identity` | restates one number | catches flat misstatements |
 
-**Phase 2 — a wider deterministic net (still no model in the verifier):**
+**Cross-statement & temporal checks (still no model in the verifier):**
 
 | Operation | Checks | Notes |
 |---|---|---|
@@ -113,7 +113,7 @@ The ingestion is pure Python (`aritiq/edgar/`): `ticker → CIK → latest 10-K 
 | `aggregate_filter` | sum/count over a filtered subset, composes into `percent_change` | B2C: "you spent 18% more on dining" |
 | `definitional_flag` | **detects** a vague word next to a number; **does not resolve it** | routes to `NEEDS_REVIEW` — never invents a numeric threshold for "flat" |
 
-Every Phase 2 operation passes the same test the original nine pass: *given
+Every cross-statement operation passes the same test the core nine pass: *given
 grounded inputs, there is one objectively correct verdict, computable by a pure
 function, with no model-judgment step.* The one candidate that fails that test —
 "is a 4% change 'flat'?" — is deliberately **not** resolved; it is flagged for a
@@ -128,9 +128,9 @@ human. That discipline is the point: the moat got wider, not smarter.
 | `UNSUPPORTED_NUMBER` | At least one operand missing from source; claim unverifiable |
 | `AMBIGUOUS` | Divide-by-zero, wrong operand count, or multi-reading |
 | `UNCHECKED` | Qualitative claim; no arithmetic applies; excluded from score |
-| `NEEDS_REVIEW` | *(Phase 2)* A vague word ("flat") sits next to a number; no universal threshold exists, so it's routed to a human. Excluded from score. |
-| `CONFLICT` | *(Phase 2)* Two source documents disagree on the same figure (restatement/typo). Surfaced, never silently resolved. |
-| `PROPAGATED_ERROR` | *(Phase 3)* This claim is not independently broken — its operands trace, through the dependency graph, back to a claim that is. Carries `caused_by` pointing at the root, so a reviewer sees one root cause plus its consequences instead of N flat flags. Excluded from the score (counted once, at the root). |
+| `NEEDS_REVIEW` | *(cross-statement)* A vague word ("flat") sits next to a number; no universal threshold exists, so it's routed to a human. Excluded from score. |
+| `CONFLICT` | *(cross-statement)* Two source documents disagree on the same figure (restatement/typo). Surfaced, never silently resolved. |
+| `PROPAGATED_ERROR` | *(multi-document)* This claim is not independently broken — its operands trace, through the dependency graph, back to a claim that is. Carries `caused_by` pointing at the root, so a reviewer sees one root cause plus its consequences instead of N flat flags. Excluded from the score (counted once, at the root). |
 
 ### Aritiq Score
 
@@ -141,13 +141,13 @@ The score (0–100) is a **trust signal**: how much should a reader trust the nu
 - `UNSUPPORTED_NUMBER` → 0.4 (unverifiable, not disproven)
 - `AMBIGUOUS` → 0.4 (structural issue, not a confirmed error)
 - `UNCHECKED` → excluded from the denominator
-- `NEEDS_REVIEW` → excluded from the denominator *(Phase 2)*
-- `CONFLICT` → 0.0 *(Phase 2)*
-- `PROPAGATED_ERROR` → excluded from the denominator *(Phase 3 — counted once at the root)*
+- `NEEDS_REVIEW` → excluded from the denominator *(cross-statement)*
+- `CONFLICT` → 0.0 *(cross-statement)*
+- `PROPAGATED_ERROR` → excluded from the denominator *(multi-document — counted once at the root)*
 
 Raw counts are always shown alongside the composite score. Counts are unarguable; the score embeds a judgment call.
 
-**Dependency weighting (Phase 3).** The score now reports two numbers side by side — for example *Weighted 62 · Unweighted 81*. The **unweighted** number is the flat mean above. The **weighted** number weights each root claim's contribution by `1 + log(1 + downstream_count)`, so a `WRONG_MATH` on a figure many claims depend on costs more than one on an isolated leaf — logarithmically, so a single failure is meaningfully (not catastrophically) penalized. `PROPAGATED_ERROR` consequences are excluded so a root error is counted once. With no dependency structure, the weighted score equals the unweighted score exactly. Both are shown so the weighting stays auditable and never becomes a black box.
+**Dependency weighting (multi-document).** The score now reports two numbers side by side — for example *Weighted 62 · Unweighted 81*. The **unweighted** number is the flat mean above. The **weighted** number weights each root claim's contribution by `1 + log(1 + downstream_count)`, so a `WRONG_MATH` on a figure many claims depend on costs more than one on an isolated leaf — logarithmically, so a single failure is meaningfully (not catastrophically) penalized. `PROPAGATED_ERROR` consequences are excluded so a root error is counted once. With no dependency structure, the weighted score equals the unweighted score exactly. Both are shown so the weighting stays auditable and never becomes a black box.
 
 ---
 
@@ -181,7 +181,7 @@ The verifier is deterministic code on deterministic inputs. Correctness is prova
 To run the benchmark live against the API:
 
 ```bash
-export ANTHROPIC_API_KEY=sk-...
+# Uses your BYOK settings from .env (ARITIQ_PROVIDER + the matching key).
 python benchmark/eval_extraction.py --live
 ```
 
@@ -191,7 +191,7 @@ python benchmark/eval_extraction.py --live
 
 These are stated here before anyone asks, because volunteering weaknesses is what makes the strengths credible.
 
-**Extraction depends on an LLM.** Claim parsing uses Claude (or any OpenAI-compatible model). Extraction errors propagate — a mis-ordered operand pair or a guessed operand can produce a false `WRONG_MATH` or a false `VERIFIED`. The benchmark measures this rate; it is not zero on real documents.
+**Extraction depends on an LLM.** Claim parsing uses whichever model you configure (Anthropic, OpenAI, Gemini, or Groq). Extraction errors propagate — a mis-ordered operand pair or a guessed operand can produce a false `WRONG_MATH` or a false `VERIFIED`. The benchmark measures this rate; it is not zero on real documents.
 
 **Table and footnote parsing is hard.** Real 10-Ks use nested HTML tables, continuation footnotes, and non-standard number formatting. The current ingestion stage handles clean prose well and struggles with complex tables. This is named future work, not a solved problem.
 
@@ -199,23 +199,23 @@ These are stated here before anyone asks, because volunteering weaknesses is wha
 
 **Narrow scope is a feature, not a bug.** The deterministic verifier catches arithmetic errors and flat misstatements with near-zero false positives on the claims it does flag. It does not attempt to judge plausibility, context, or forward-looking statements. That narrowness is what makes the catch defensible.
 
-### Phase 2 limitations (named before anyone asks)
+### Cross-statement limitations
 
 **The verifier is model-free; its verdicts still rest on upstream extraction tags.** This is the honest boundary of the thesis. "Code verifies the arithmetic" is unconditionally true. But "code verifies the claim is about what the extractor *said* it's about" is not — the verifier trusts that the extractor tagged the EPS variant correctly, ordered the time series chronologically, and selected the right filtered subset. A wrong tag can fail silently (e.g. a mis-tagged shares variant flips the EPS guard from `AMBIGUOUS` to a confident verdict). The firewall guarantees no model grades the math; it does not guarantee the extractor's labels are right. We measure extraction error separately and report it broken out by type, never blended.
 
-**Cross-document comparability is a genuine unsolved problem.** When a prior-period filing uses a different accounting presentation (a restatement, a segment reclassification), the "same" number may not be comparable even when both are correctly grounded. The source registry surfaces a `CONFLICT` when two documents disagree on a figure — it never silently picks a winner — but it cannot reconcile a presentation change. Phase 3's restatement scan annotates such a conflict with whether the filer's own text *discloses* a restatement or reclassification near the disputed number (see below); it does not reconcile the presentation, and it does not determine what kind of change occurred.
+**Cross-document comparability is a genuine unsolved problem.** When a prior-period filing uses a different accounting presentation (a restatement, a segment reclassification), the "same" number may not be comparable even when both are correctly grounded. The source registry surfaces a `CONFLICT` when two documents disagree on a figure — it never silently picks a winner — but it cannot reconcile a presentation change. The restatement scan annotates such a conflict with whether the filer's own text *discloses* a restatement or reclassification near the disputed number (see below); it does not reconcile the presentation, and it does not determine what kind of change occurred.
 
 **GAAP/non-GAAP and basic/diluted EPS are designed-around, not eliminated.** `eps_reconciliation` records which EPS variant it grounded and refuses to compare a basic EPS against diluted shares (it returns `AMBIGUOUS`, not a false `WRONG_MATH`). If the variant is unrecorded on either side, the check is held at `AMBIGUOUS` and **not run** — a `WRONG_MATH` from untagged operands can't be distinguished from a variant mismatch, so it is never emitted (the explanation names the fix: tag `eps_variant` on the claim and `category` on the shares operand). A `WRONG_MATH` on an `eps_reconciliation` claim is therefore trustworthy only when the extractor tagged the variant on both sides. Cross-statement checks can still produce a `WRONG_MATH` on a correctly-reported but unusually-presented number (a GAAP/non-GAAP reconciliation); the fix is more extraction metadata, not a smarter check.
 
 **B2C categorization is a conditional guarantee.** "Is a Target purchase 'groceries' or 'household'?" is an ambiguity in the source data itself, not just in extraction. An `aggregate_filter` verdict is conditional on the categorization scheme, and an operand whose category was inferred carries `category_inferred` provenance plus a scheme-version stamp so a "verified-but-recategorized" claim is visibly different from a clean match — and so categorization *drift* between months is detectable, not invisible. The B2C path is scoped to synthetic or the user's own consented data; no feature stores or transmits other people's financial documents.
 
-**Real-document accuracy is still unmeasured.** Phase 2's benchmarks prove *verifier-logic precision* on constructed inputs (synthetic statements with exact ground truth, and a 10-K-shaped table fixture run end-to-end). They are explicitly **not** a real-filing accuracy number — measuring that honestly requires live extraction over hand-labelled filings, which is named future work. No fabricated real-10-K figure appears anywhere in this repo.
+**Real-document accuracy is still unmeasured.** The cross-statement benchmarks prove *verifier-logic precision* on constructed inputs (synthetic statements with exact ground truth, and a 10-K-shaped table fixture run end-to-end). They are explicitly **not** a real-filing accuracy number — measuring that honestly requires live extraction over hand-labelled filings, which is named future work. No fabricated real-10-K figure appears anywhere in this repo.
 
-### Phase 3 limitations (named before anyone asks)
+### Multi-document limitations
 
-**The dependency graph only works if extraction tags the edges.** Move 1's propagation, and Move 3's weighting that builds on it, do nothing unless the extractor tags when one claim's operand is another claim's stated output (`depends_on`). An unlinked shared number simply doesn't propagate; a wrongly-linked one propagates where it shouldn't. The graph logic is provably correct given correct edges — but the edges are an extraction property, measured separately, not a guarantee of the verifier.
+**The dependency graph only works if extraction tags the edges.** The dependency-graph propagation, and the weighting that builds on it, do nothing unless the extractor tags when one claim's operand is another claim's stated output (`depends_on`). An unlinked shared number simply doesn't propagate; a wrongly-linked one propagates where it shouldn't. The graph logic is provably correct given correct edges — but the edges are an extraction property, measured separately, not a guarantee of the verifier.
 
-**The restatement scan detects disclosure language, not restatement type.** Move 2 scans a bounded window of text near a `CONFLICT` figure for the filer's own restatement or reclassification language. `EXPLICIT_RESTATEMENT` means that language was found; `POSSIBLE_RECLASSIFICATION` and `UNEXPLAINED` are claims about the *text* ("reclassification language is / no disclosure language is present near the number"), **not** determinations about the accounting. It does not diff XBRL taxonomy tags and does not assert what kind of change occurred. The scan is only as good as the context the extractor located the figure in; a mis-located figure yields an annotation about the wrong text.
+**The restatement scan detects disclosure language, not restatement type.** The restatement scan reads a bounded window of text near a `CONFLICT` figure for the filer's own restatement or reclassification language. `EXPLICIT_RESTATEMENT` means that language was found; `POSSIBLE_RECLASSIFICATION` and `UNEXPLAINED` are claims about the *text* ("reclassification language is / no disclosure language is present near the number"), **not** determinations about the accounting. It does not diff XBRL taxonomy tags and does not assert what kind of change occurred. The scan is only as good as the context the extractor located the figure in; a mis-located figure yields an annotation about the wrong text.
 
 **The weighted score embeds a deliberate judgment call.** The choice of `1 + log(1 + downstream_count)` is a defensible weighting, not a derived constant — logarithmic so a single failure is meaningful but not catastrophic. The unweighted score is always shown beside it so the judgment stays visible and comparable, and the two are equal whenever there is no dependency structure to weight by.
 
@@ -223,31 +223,46 @@ These are stated here before anyone asks, because volunteering weaknesses is wha
 
 ## Running the project
 
+Everything runs locally. There is no sign-in and no hosted service — you bring your own model API key (BYOK).
+
 ### Prerequisites
 
 - Python ≥ 3.9
-- Node.js ≥ 18
-- An Anthropic API key (for live extraction; not needed for tests or offline benchmark)
+- Node.js ≥ 18 (only if you want the web UI)
+- Your own model API key for live extraction — one of Anthropic, OpenAI, Gemini, or Groq. Not needed for the tests, the offline demo, or the bundled examples.
 
-### Backend
+### 1. Configure your key (BYOK)
 
 ```bash
-# Install
-pip install -e ".[anthropic,api,dev]"
+cp .env.example .env
+# then edit .env — set ARITIQ_PROVIDER and paste the matching key, e.g.
+#   ARITIQ_PROVIDER=anthropic
+#   ANTHROPIC_API_KEY=sk-ant-...
+```
 
-# Run tests (no API key needed)
-pytest tests/ -v
+`.env` is git-ignored, so your key never gets committed. See `.env.example` for all supported providers.
 
-# Run offline demo (no API key needed)
+### 2. Backend
+
+```bash
+# Install core deps (+ the SDK for the provider you chose)
+pip install -r requirements.txt
+pip install anthropic        # or: openai / google-genai, to match ARITIQ_PROVIDER
+
+# Run the tests (no key needed)
+pytest tests/ -q
+
+# Run the offline demo (no key needed)
 python demo.py
 
-# Start the API server
-export ANTHROPIC_API_KEY=sk-...
-uvicorn api.main:app --reload
+# Start the local API server
+uvicorn backend.app:app --reload --port 8000
 # → http://localhost:8000
 ```
 
-### Frontend
+The server audits the bundled examples with **no key**. To audit your own documents, it reads the key from your `.env`.
+
+### 3. Frontend (optional web UI)
 
 ```bash
 cd frontend
@@ -256,66 +271,64 @@ npm run dev
 # → http://localhost:3000
 ```
 
-Then open `http://localhost:3000`, paste a source document and an AI-generated summary, and hit Audit.
+Then open `http://localhost:3000`, paste a source document and an AI-generated summary, and hit Audit. (The UI talks to the backend on `http://localhost:8000` by default — override with `NEXT_PUBLIC_API_URL`.)
 
 ### Project structure
 
 ```
 aritiq/
   core/                       # ── the verification path: NO LLM anywhere here ──
-    schema.py        # Claim, Operand, registry, all enums (Phase 1 + 2 + 3)
-    verify.py        # Deterministic verifier — dispatches Phase 2 ops to rules.py
-    rules.py         # Phase 2 pure rule functions (cross-statement, temporal, …)
+    schema.py        # Claim, Operand, registry, all enums
+    verify.py        # Deterministic verifier — dispatches cross-statement ops to rules.py
+    rules.py         # cross-statement pure rule functions (cross-statement, temporal, …)
     registry.py      # Source registry + cross-document CONFLICT detection (§2.2, §7)
     tables.py        # Structured table extraction + unit normalization (§2.1, §2.2)
-    graph.py         # Phase 3: dependency DAG + propagated-error walk (Move 1)
-    restatement.py   # Phase 3: restatement disclosure-language scan (Move 2)
-    conflicts.py     # Phase 3: cross-document CONFLICT verdicts (registry + restatement bridge)
-    score.py         # Aritiq Score: purpose-derived weights + dependency weighting (Move 3)
+    graph.py         # dependency DAG + propagated-error walk
+    restatement.py   # restatement disclosure-language scan
+    conflicts.py     # cross-document CONFLICT verdicts (registry + restatement bridge)
+    score.py         # Aritiq Score: purpose-derived weights + dependency weighting
   edgar/                      # ── SEC EDGAR ingestion: NO LLM, no cost ──
     sec.py           # ticker → CIK → latest 10-K → strip HTML → extract statements
   extract/                    # ── the ONLY place an LLM runs ──
-    schema.py        # Pydantic contract for LLM output (Phase 1 + Phase 2 fields)
-    prompt.py        # Phase 1 summary-audit extraction prompt (+ multi-doc routing)
-    cross_statement.py # Phase 2 cross-statement extraction prompt + applicability guard
+    schema.py        # Pydantic contract for LLM output
+    prompt.py        # summary-audit extraction prompt (+ multi-doc routing)
+    cross_statement.py # cross-statement extraction prompt + applicability guard
     extractor.py     # Provider-agnostic engine (Anthropic / OpenAI / Gemini / Groq)
   pipeline.py        # audit() / audit_documents() → AuditResult
-api/
-  main.py            # FastAPI: POST /audit, GET /health
 backend/
-  app.py             # FastAPI: /audit, /audit-multi, /audit-ticker, /examples, /health
+  app.py             # local FastAPI server: /audit, /audit-multi, /audit-ticker, /examples, /health, /dashboard, /analyst, /timeline
 frontend/
   app/page.tsx       # Single-page UI
   components/        # ScoreRing, ClaimsTable, ClaimRow, InputPanel, …
 benchmark/
-  gold_set.json              # Phase 1: 21 hand-labeled claims across 4 documents
-  eval_extraction.py         # Phase 1 harness: replay + live, fault-injection self-test
+  gold_set.json              # 21 hand-labeled claims across 4 documents
+  eval_extraction.py         # extraction harness: replay + live, fault-injection self-test
   runs/                      # Saved model outputs (replay artifacts)
-  cross_statement_gold.json  # Phase 2: synthetic statements, exact ground truth
-  eval_cross_statement.py    # Phase 2 per-rule benchmark + fault-injection self-test
-  eval_table_extraction.py   # Phase 2 end-to-end table→normalize→verify on a 10-K-shaped fixture
+  cross_statement_gold.json  # synthetic statements, exact ground truth
+  eval_cross_statement.py    # per-rule benchmark + fault-injection self-test
+  eval_table_extraction.py   # end-to-end table→normalize→verify on a 10-K-shaped fixture
   table_fixtures/            # Constructed 10-K-style excerpts (fabricated numbers)
 tests/
-  test_verifier.py           # Phase 1: 32 unit tests, all operations both directions
-  test_extract.py            # Phase 1: 29 extraction tests, mocked (no API key)
-  test_cross_statement.py    # Phase 2: cross-statement rules + the EPS-variant confound
-  test_temporal.py           # Phase 2: trend / superlative / consecutive-count
-  test_b2c_aggregate.py      # Phase 2: aggregate_filter + category-inferred provenance
-  test_definitional_flag.py  # Phase 2: flag-and-route discipline (no invented threshold)
-  test_tables.py             # Phase 2: table parsing + unit normalization
-  test_registry.py           # Phase 2: registry + cross-document conflict detection
-  test_cross_statement_extract.py  # Phase 2: extraction applicability discipline + firewall
-  test_phase2_firewall.py    # Phase 2: AST proof that no new verifier code imports a model
-  test_graph.py              # Phase 3: DAG construction + propagation (Move 1)
-  test_score_weighted.py     # Phase 3: dependency-weighted score + degrade-to-flat invariant (Move 3)
-  test_restatement.py        # Phase 3: disclosure-language scan + over-fire boundary (Move 2)
-  test_vesper_endtoend.py    # Phase 3: every component on the Vesper pair (deterministic, no LLM)
-  test_pipeline_multidoc.py  # Phase 3: audit_documents wiring + cross-doc CONFLICT surfacing
+  test_verifier.py           # 32 unit tests, all operations both directions
+  test_extract.py            # 29 extraction tests, mocked (no API key)
+  test_cross_statement.py    # cross-statement rules + the EPS-variant confound
+  test_temporal.py           # trend / superlative / consecutive-count
+  test_b2c_aggregate.py      # aggregate_filter + category-inferred provenance
+  test_definitional_flag.py  # flag-and-route discipline (no invented threshold)
+  test_tables.py             # table parsing + unit normalization
+  test_registry.py           # registry + cross-document conflict detection
+  test_cross_statement_extract.py  # extraction applicability discipline + firewall
+  test_extraction_firewall.py # AST proof that no verifier code imports a model
+  test_graph.py              # DAG construction + propagation
+  test_score_weighted.py     # dependency-weighted score + degrade-to-flat invariant
+  test_restatement.py        # disclosure-language scan + over-fire boundary
+  test_vesper_endtoend.py    # every component on the Vesper pair (deterministic, no LLM)
+  test_pipeline_multidoc.py  # audit_documents wiring + cross-doc CONFLICT surfacing
 demo.py              # Offline verifier demo
 demo_extract.py      # Offline pipeline demo (replay extractor)
 ```
 
-### Running the Phase 2 benchmarks
+### Running the consistency benchmarks
 
 ```bash
 # Cross-statement consistency, reported PER RULE (never blended):
@@ -334,4 +347,4 @@ Aritiq is infrastructure, not a chatbot. It's a guardrail you install before shi
 
 ---
 
-*Built for YC Startup School 2026.*
+Aritiq is open source. Contributions welcome — see the code, run the tests, and open a PR.

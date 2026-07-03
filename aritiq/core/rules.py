@@ -1,9 +1,9 @@
 """
-Phase 2 deterministic rule functions.
+cross-statement deterministic rule functions.
 
 THIS FILE CONTAINS NO LLM CALLS.  Every function here is a pure function:
 grounded numbers in, a typed verdict out.  A reviewer can read it top to bottom
-and confirm no model is involved.  This is the heart of the Phase 2 thesis — the
+and confirm no model is involved.  This is the heart of the core thesis — the
 moat got *wider* (more kinds of claim it can check by code) without getting
 *smarter* (no model-judgment step ever enters).
 
@@ -13,7 +13,7 @@ judgment step."  Where a candidate FAILED that test (logical/definitional
 "flat", §3.4), it is deliberately routed to a human, not resolved — see
 `flag_definitional`.
 
-Status convention reused from Phase 1:
+Status convention reused from summary-audit:
   VERIFIED / WRONG_MATH        — comparison within / outside tolerance
   AMBIGUOUS                    — structural problem (divide-by-zero, bad count)
   UNSUPPORTED_NUMBER           — a required operand is missing
@@ -51,7 +51,7 @@ class CheckResult:
 
 # ---------------------------------------------------------------------------
 # Shared classifier — the same "within tolerance -> VERIFIED else WRONG_MATH"
-# decision Phase 1 makes, reused so cross-statement checks don't reinvent it.
+# decision summary-audit makes, reused so cross-statement checks don't reinvent it.
 # Supports either an absolute tolerance or a relative one (exactly one is set).
 # ---------------------------------------------------------------------------
 
@@ -85,7 +85,7 @@ def _classify(
 # ===========================================================================
 # §3.3  Cross-statement internal-consistency rules
 # ===========================================================================
-# Tighter tolerances than Phase 1 (spec §2.3): a document's own table should
+# Tighter tolerances than summary-audit (spec §2.3): a document's own table should
 # add up far more precisely than a human writer's prose rounds.
 
 DEFAULT_BS_REL_TOLERANCE: float = 0.001     # balance sheet identity: 0.1%

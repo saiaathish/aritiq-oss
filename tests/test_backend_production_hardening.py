@@ -1,3 +1,6 @@
+"""Backend hardening that still applies in the local-first build:
+request size limits, and per-request BYOK that never persists a key.
+"""
 import os
 
 import pytest
@@ -8,44 +11,11 @@ from fastapi.testclient import TestClient  # noqa: E402
 import backend.app as app_mod  # noqa: E402
 
 
-@pytest.fixture(autouse=True)
-def clear_rate_buckets():
-    app_mod._RATE_BUCKETS.clear()
-    yield
-    app_mod._RATE_BUCKETS.clear()
-
-
-def test_api_key_required_when_configured(monkeypatch):
-    monkeypatch.setenv("ARITIQ_API_KEYS", "secret")
-    client = TestClient(app_mod.app)
-    ex = app_mod.EXAMPLES[0]
-    r = client.post("/audit", json={"source": ex["source"], "summary": ex["summary"]})
-    assert r.status_code == 401
-    r = client.post(
-        "/audit",
-        headers={"x-api-key": "secret"},
-        json={"source": ex["source"], "summary": ex["summary"]},
-    )
-    assert r.status_code == 200
-
-
-def test_rate_limit_applies_to_mutating_endpoints(monkeypatch):
-    monkeypatch.setenv("ARITIQ_API_KEYS", "secret")
-    monkeypatch.setattr(app_mod, "RATE_LIMIT_PER_MINUTE", 1)
-    client = TestClient(app_mod.app)
-    ex = app_mod.EXAMPLES[0]
-    payload = {"source": ex["source"], "summary": ex["summary"]}
-    assert client.post("/audit", headers={"x-api-key": "secret"}, json=payload).status_code == 200
-    assert client.post("/audit", headers={"x-api-key": "secret"}, json=payload).status_code == 429
-
-
 def test_request_size_limit_rejects_large_summary(monkeypatch):
-    monkeypatch.setenv("ARITIQ_API_KEYS", "secret")
     monkeypatch.setattr(app_mod, "MAX_SUMMARY_CHARS", 5)
     client = TestClient(app_mod.app)
     r = client.post(
         "/audit",
-        headers={"x-api-key": "secret"},
         json={"source": "source", "summary": "too long"},
     )
     assert r.status_code == 422

@@ -40,8 +40,8 @@ def _bs_audit(source, summary, **kw):
     return real_audit(source, summary, complete_fn=lambda s, u: "[]", cs_complete_fn=cs)
 
 
-# Endpoints require auth (anonymous access was removed); use a legacy test key.
-_AUTH = {"X-API-Key": "test-secret"}
+# Local-first build: endpoints are open. Headers are harmless if present.
+_AUTH = {}
 
 
 @pytest.fixture
@@ -51,7 +51,6 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setenv("ARITIQ_API_KEYS", "test-secret")
     monkeypatch.setenv("ARITIQ_ENTERPRISE_DB", str(tmp_path / "enterprise.sqlite"))
-    app_mod._RATE_BUCKETS.clear()
     return TestClient(app_mod.app)
 
 
@@ -106,7 +105,6 @@ def test_missing_key_is_503(monkeypatch, tmp_path):
     monkeypatch.setenv("ARITIQ_API_KEYS", "test-secret")
     monkeypatch.setenv("ARITIQ_ENTERPRISE_DB", str(tmp_path / "enterprise.sqlite"))
     monkeypatch.setattr(app_mod, "fetch_10k_text", lambda t: (_FILING, _SOURCE))
-    app_mod._RATE_BUCKETS.clear()
     client = TestClient(app_mod.app)
     r = client.post("/audit-ticker", headers=_AUTH, json={"ticker": "AAPL"})
     assert r.status_code == 503

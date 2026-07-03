@@ -1,70 +1,342 @@
 "use client";
 
-import { Play } from 'lucide-react';
-import BoomerangVideoBg from '@/components/BoomerangVideoBg';
-import { AritiqNav } from '@/components/ui/navigation-menu';
-import LandingSections from '@/components/LandingSections';
+import * as React from "react";
+import { useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
+import { ShieldCheck, Lock, Loader2, ScanSearch, AlertTriangle, Building2, ExternalLink } from "lucide-react";
+import { InputPanel, type InputMode } from "@/components/InputPanel";
+import { ScoreRing } from "@/components/ScoreRing";
+import { ClaimsTable } from "@/components/ClaimsTable";
+import { DependencyGraph } from "@/components/DependencyGraph";
+import { ErrorBanner } from "@/components/ErrorBanner";
+import { Card } from "@/components/ui/card";
+import { audit, auditDocuments, auditTicker, getExamples, ApiError } from "@/lib/api";
+import { splitDocuments } from "@/lib/splitDocuments";
+import type { AuditResult, Example } from "@/lib/types";
 
-const BG_VIDEO = '/hero.mp4';
+function Page() {
+  const searchParams = useSearchParams();
+  const [mode, setMode] = React.useState<InputMode>("ticker");
+  const [ticker, setTicker] = React.useState("");
+  const [source, setSource] = React.useState("");
+  const [summary, setSummary] = React.useState("");
+  const [result, setResult] = React.useState<AuditResult | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [examples, setExamples] = React.useState<Example[]>([]);
 
-export default function App() {
+  React.useEffect(() => {
+    getExamples().then(setExamples);
+  }, []);
+
+  const runTickerAuditInternal = React.useCallback(async (t: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await auditTicker(t);
+      setResult(data);
+    } catch (e) {
+      setResult(null);
+      setError(e instanceof ApiError ? e.message : "Something went wrong fetching that filing.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Handle URL query parameter ?ticker=...
+  React.useEffect(() => {
+    const t = searchParams.get("ticker");
+    if (t) {
+      const upper = t.toUpperCase().trim();
+      setTicker(upper);
+      setMode("ticker");
+      runTickerAuditInternal(upper);
+    }
+  }, [searchParams, runTickerAuditInternal]);
+
+  const runAudit = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const split = splitDocuments(source);
+      const data = split.multi
+        ? await auditDocuments(split.documents, summary)
+        : await audit(source, summary);
+      setResult(data);
+    } catch (e) {
+      setResult(null);
+      setError(e instanceof ApiError ? e.message : "Something went wrong while auditing.");
+    } finally {
+      setLoading(false);
+    }
+  }, [source, summary]);
+
+  const runTickerAudit = React.useCallback(async () => {
+    runTickerAuditInternal(ticker);
+  }, [ticker, runTickerAuditInternal]);
+
+  function loadExample(ex: Example) {
+    setMode("paste");
+    setSource(ex.source);
+    setSummary(ex.summary);
+    setResult(null);
+    setError(null);
+  }
+
   return (
-    <main className="bg-[#060a12] text-foreground">
-      <section className="relative w-full min-h-screen sm:h-screen overflow-hidden">
-        <BoomerangVideoBg src={BG_VIDEO} className="absolute inset-0 w-full h-full" />
-        {/* Darkening + top-to-middle fade for text legibility */}
-        <div className="absolute inset-0 z-[1] bg-black/25 pointer-events-none" />
-        <div
-          className="absolute inset-0 z-[1] pointer-events-none"
-          style={{
-            background:
-              'linear-gradient(to bottom, rgba(4,10,18,0.92) 0%, rgba(4,10,18,0.55) 28%, rgba(4,10,18,0) 52%)',
+    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <Header />
+
+      <div className="mt-8">
+        <InputPanel
+          mode={mode}
+          onModeChange={(m) => {
+            setMode(m);
+            setError(null);
           }}
+          ticker={ticker}
+          onTickerChange={setTicker}
+          onAuditTicker={runTickerAudit}
+          source={source}
+          summary={summary}
+          onSourceChange={setSource}
+          onSummaryChange={setSummary}
+          onAudit={runAudit}
+          loading={loading}
+          examples={examples}
+          onLoadExample={loadExample}
         />
-        {/* Bottom fade so the hero video blends into the problem section */}
-        <div
-          className="absolute inset-x-0 bottom-0 z-[2] h-48 sm:h-56 pointer-events-none"
-          style={{ background: 'linear-gradient(to top, #060a12 0%, rgba(6,10,18,0.6) 45%, transparent 100%)' }}
-        />
-        <AritiqNav />
+      </div>
 
-        {/* Hero copy */}
-        <div className="relative z-10 flex flex-col items-center text-center pt-24 sm:pt-28 md:pt-32 px-4 sm:px-6">
-          <h1
-            className="font-normal leading-[0.95] text-[#EAF2FB] text-[2rem] sm:text-4xl md:text-5xl lg:text-[4.75rem] xl:text-[5.25rem] max-w-5xl"
-            style={{
-              letterSpacing: '-0.035em',
-            }}
-          >
-            Verify financial claims.{' '}
-            <span className="text-[#6BB4F0]">
-              Deterministically.
-            </span>
-          </h1>
-          <p className="mt-6 sm:mt-8 text-white/80 text-sm sm:text-base md:text-lg leading-relaxed max-w-md px-2">
-            Aritiq parses numeric assertions from SEC filings using language models, then re-derives and checks every value using deterministic calculation code.
-          </p>
-          <div className="mt-6 sm:mt-8 flex items-center gap-4 flex-wrap justify-center">
-            <a
-              href="/app"
-              className="bg-white hover:bg-white/90 text-[#13233d] text-sm font-semibold px-6 py-3 rounded-full transition-colors shadow-sm"
-            >
-              Run an audit
-            </a>
-            <a
-              href="#benchmark"
-              className="text-white text-sm font-semibold hover:opacity-80 transition-opacity"
-            >
-              View benchmark
-            </a>
-          </div>
-          <p className="mt-4 text-white/60 text-xs">
-            No models are used in the verification engine.
-          </p>
-        </div>
-      </section>
+      <div className="mt-6">
+        <AnimatePresence mode="wait">
+          {error && !loading && (
+            <motion.div key="error" exit={{ opacity: 0 }}>
+              <ErrorBanner message={error} onRetry={runAudit} />
+            </motion.div>
+          )}
 
-      <LandingSections />
+          {loading && (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+            >
+              <LoadingState />
+            </motion.div>
+          )}
+
+          {!loading && result && (
+            <motion.div
+              key="result"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+              className="space-y-6"
+            >
+              {result.filing && <FilingBanner filing={result.filing} />}
+
+              <Card className="p-6 sm:p-8">
+                <ScoreRing score={result.score} results={result.results} />
+              </Card>
+
+              {result.issues.length > 0 && <IssuesNote count={result.issues.length} messages={result.issues.map((i) => i.message)} />}
+
+              {result.conflicts && result.conflicts.length > 0 && (
+                <ConflictsPanel conflicts={result.conflicts} />
+              )}
+
+              <DependencyGraph results={result.results} />
+
+              <ClaimsTable results={result.results} />
+            </motion.div>
+          )}
+
+          {!loading && !result && !error && (
+            <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <EmptyState />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <Footer />
     </main>
+  );
+}
+
+function Header() {
+  return (
+    <header>
+      <div className="flex items-center gap-3.5">
+        <img
+          src="/logo-text-light.png"
+          alt="Aritiq"
+          className="h-14 w-auto object-contain"
+          style={{ filter: "drop-shadow(0 0 25px rgba(107, 180, 240, 0.45))" }}
+        />
+        <div className="hidden sm:block border-l border-white/10 pl-3">
+          <p className="text-4xl font-extrabold text-muted-foreground/90 tracking-wider">OSS</p>
+        </div>
+      </div>
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted">
+        Open-source, self-hosted version of Aritiq, a financial verification engine. It runs entirely locally to audit LLM-generated summaries, mapping numerical claims to ground-truth sources and verifying calculations deterministically without exposing your data.
+      </p>
+    </header>
+  );
+}
+
+function LoadingState() {
+  return (
+    <Card className="p-8">
+      <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+        <div className="relative">
+          <div className="h-16 w-16 rounded-full border-2 border-white/10" />
+          <Loader2 className="absolute inset-0 m-auto h-8 w-8 animate-spin text-primary" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-foreground">Auditing the summary…</p>
+          <p className="mt-1 text-xs text-muted">Extracting claims, tracing operands, recomputing the math.</p>
+        </div>
+        <div className="mt-2 w-full max-w-md space-y-2">
+          {[0, 1, 2].map((i) => (
+            <motion.div
+              key={i}
+              className="h-10 rounded-lg bg-white/[0.04]"
+              animate={{ opacity: [0.4, 0.7, 0.4] }}
+              transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.18, ease: "easeInOut" }}
+            />
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function EmptyState() {
+  return (
+    <Card className="p-10">
+      <div className="flex flex-col items-center justify-center gap-3 py-6 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl glass-subtle">
+          <ScanSearch className="h-6 w-6 text-muted" />
+        </div>
+        <p className="text-sm font-medium text-foreground">No audit yet</p>
+        <p className="max-w-sm text-xs text-muted">
+          Paste a source document and an AI summary above, or use “Load example,” then run an audit
+          to see the score and a fully inspectable per-claim trace.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+function IssuesNote({ count, messages }: { count: number; messages: string[] }) {
+  return (
+    <div className="rounded-xl border border-unsupported/25 bg-unsupported/[0.06] p-4">
+      <div className="flex items-center gap-2 text-sm font-medium text-unsupported">
+        <AlertTriangle className="h-4 w-4" />
+        {count} extracted claim{count === 1 ? "" : "s"} failed schema validation and {count === 1 ? "was" : "were"} skipped
+      </div>
+      <ul className="mt-2 space-y-1 pl-6 text-xs text-muted">
+        {messages.slice(0, 4).map((m, i) => (
+          <li key={i} className="list-disc">{m}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function FilingBanner({ filing }: { filing: NonNullable<AuditResult["filing"]> }) {
+  return (
+    <div className="rounded-xl glass-subtle p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 ring-1 ring-inset ring-primary/30">
+            <Building2 className="h-4.5 w-4.5 text-primary" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-foreground">
+              {filing.company}{" "}
+              <span className="font-mono text-xs font-normal text-muted">({filing.ticker})</span>
+            </div>
+            <div className="text-xs text-muted">
+              Latest 10-K · filed {filing.filing_date}
+              {filing.period ? ` · period ${filing.period}` : ""} · fetched from SEC EDGAR
+            </div>
+          </div>
+        </div>
+        <a
+          href={filing.document_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-white/[0.08] hover:text-foreground"
+        >
+          View filing on SEC.gov
+          <ExternalLink className="h-3.5 w-3.5" />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function ConflictsPanel({ conflicts }: { conflicts: AuditResult["conflicts"] }) {
+  if (!conflicts || conflicts.length === 0) return null;
+  const RESTATEMENT_LABEL: Record<string, string> = {
+    EXPLICIT_RESTATEMENT: "Explicit restatement language found nearby",
+    POSSIBLE_RECLASSIFICATION: "Reclassification language found nearby",
+    UNEXPLAINED: "No disclosure language found near the figure",
+    UNCLASSIFIED: "Not classified",
+  };
+  return (
+    <div className="rounded-xl border border-wrong/30 bg-wrong/[0.06] p-5">
+      <div className="flex items-center gap-2 text-sm font-semibold text-wrong">
+        <AlertTriangle className="h-4 w-4" />
+        {conflicts.length} cross-document conflict{conflicts.length === 1 ? "" : "s"} — two filings
+        disagree on the same figure
+      </div>
+      <p className="mt-1 text-xs text-muted">
+        Aritiq surfaces the disagreement and never silently picks a winner — the authoritative figure
+        is a human decision. Where the filer&apos;s own text discloses a restatement near the number,
+        that is noted (disclosure language found, not a determination of restatement type).
+      </p>
+      <ul className="mt-3 space-y-2">
+        {conflicts.map((c, i) => (
+          <li key={i} className="rounded-lg bg-white/[0.03] p-3 text-[13px]">
+            <div className="font-medium text-foreground">{c.claim.claim_text}</div>
+            <div className="mt-1 text-xs text-muted">{c.explanation}</div>
+            {c.restatement_type && (
+              <span className="mt-2 inline-flex items-center rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-primary ring-1 ring-inset ring-primary/30">
+                {RESTATEMENT_LABEL[c.restatement_type] ?? c.restatement_type}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="mt-14 border-t border-border/60 pt-6">
+      <p className="text-center text-xs text-muted">
+        The verifier contains no LLM. Every verdict above is produced by code re-computing the math —
+        inspect any claim to trace the operands and the arithmetic.
+      </p>
+    </footer>
+  );
+}
+
+export default function AppContainer() {
+  return (
+    <React.Suspense fallback={
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+        <LoadingState />
+      </div>
+    }>
+      <Page />
+    </React.Suspense>
   );
 }

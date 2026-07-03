@@ -1,11 +1,11 @@
 """
-End-to-end wiring tests: Phase 2 claims must actually reach the AuditResult.
+End-to-end wiring tests: cross-statement claims must actually reach the AuditResult.
 
 The bug these guard against: the verifier and UI both supported
 internal_consistency, but the audit() pipeline never RAN cross-statement
-extraction, so a real audit produced zero Phase 2 claims and every new UI
+extraction, so a real audit produced zero cross-statement claims and every new UI
 section was permanently empty. These tests prove the pipeline now emits them —
-and that Phase 1-only inputs are unchanged.
+and that summary-audit-only inputs are unchanged.
 
 No API key / no network — everything goes through injected replay fixtures.
 """
@@ -90,7 +90,7 @@ class TestCrossStatementReachesPipeline:
 
 class TestPhase1Unchanged:
     def test_no_cs_fixture_means_no_internal_claims(self):
-        """A Phase 1 replay (summary fixture only, no cs fixture) must behave
+        """A summary-audit replay (summary fixture only, no cs fixture) must behave
         exactly as before: zero internal_consistency claims, no accidental
         cross-statement run."""
         res = audit(

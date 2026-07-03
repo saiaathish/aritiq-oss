@@ -1,5 +1,5 @@
 """
-Phase 3 / Move 1 — provenance graph + propagated-error logic.
+the provenance graph — provenance graph + propagated-error logic.
 
 THIS FILE CONTAINS NO LLM CALLS.  It is pure graph code over data the extractor
 already produced (Claim.node_id, Claim.depends_on).  A reviewer can read it top
@@ -8,12 +8,12 @@ by extraction, and this module only walks them.
 
 Why this exists (problem statement, written down, not reverse-engineered)
 -------------------------------------------------------------------------
-Before Phase 3, claims were verified in isolation.  If one claim's input number
+Before the multi-document pass, claims were verified in isolation.  If one claim's input number
 was wrong, every claim derived from it was flagged (or not) on its own, with no
 record that they share a cause.  A reviewer saw N separate WRONG_MATH flags
 instead of ONE root cause and N consequences.
 
-Move 1 adds the missing structure: a directed acyclic graph whose nodes are
+the provenance graph adds the missing structure: a directed acyclic graph whose nodes are
 claims (keyed by Claim.node_id) and whose edges are Claim.depends_on.  After the
 verifier runs unchanged on every claim independently, we walk the graph and
 relabel the *downstream consequences* of a root failure as PROPAGATED_ERROR,
@@ -21,7 +21,7 @@ pointing each back at the root that caused it.
 
 The §3.1 discipline still holds: nothing here introduces model judgment.  Given
 the same claims and the same depends_on edges, the propagation output is exactly
-one deterministic result.  The hard part Move 1 depends on — deciding that two
+one deterministic result.  The hard part the provenance graph depends on — deciding that two
 claims share a number — is EXTRACTION work, surfaced as depends_on edges; this
 module trusts those edges exactly as the verifier trusts grounded operands.
 """
@@ -51,7 +51,7 @@ class GraphCycleError(ValueError):
 # downstream.  A wrong or unsupportable number poisons everything derived from
 # it.  (CONFLICT is deliberately NOT here: a cross-document disagreement is a
 # property of the source registry, not a derivation this claim got wrong, and
-# its downstream handling is a separate concern — see Move 2.)
+# its downstream handling is a separate concern — see the restatement classifier.)
 _PROPAGATING_FAILURES = {
     VerificationStatus.WRONG_MATH,
     VerificationStatus.UNSUPPORTED_NUMBER,
@@ -103,7 +103,7 @@ class DAG:
     def downstream_count(self, node_id: str) -> int:
         """Number of claims that depend (transitively) on this one.
 
-        Used by Move 3 to weight a root claim's importance: a number fourteen
+        Used by the weighted score to weight a root claim's importance: a number fourteen
         other claims rest on matters more than an isolated leaf.
         """
         return len(self.downstream(node_id))
@@ -115,7 +115,7 @@ def build_dag(claims: Sequence[Claim]) -> DAG:
     * A claim participates as a node iff it has a node_id OR is referenced as a
       dependency by another claim.  Claims with neither are pure leaves that no
       one depends on — they're irrelevant to propagation and simply omitted from
-      the graph (their verdict stands alone, exactly as before Phase 3).
+      the graph (their verdict stands alone, exactly as before the multi-document pass).
     * Edges that point at an unknown node_id are tolerated but ignored with the
       edge dropped — a dangling dependency can't propagate anything, and refusing
       to build the whole graph over one stray reference would be brittle.  (The

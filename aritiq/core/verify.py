@@ -33,10 +33,10 @@ from .rules import (
     run_internal_consistency_rule,
 )
 
-# Phase 2 operations are dispatched to rules.py and bypass the Phase 1
+# cross-statement operations are dispatched to rules.py and bypass the summary-audit
 # stated_value/operand-count assumptions, which were written when every claim
 # was a two-or-three-operand arithmetic statement.  Keeping them in this set
-# lets the Phase 1 code path below stay byte-for-byte unchanged.
+# lets the summary-audit code path below stay byte-for-byte unchanged.
 _PHASE2_OPERATIONS = {
     Operation.INTERNAL_CONSISTENCY,
     Operation.TREND_DIRECTION,
@@ -148,7 +148,7 @@ def _within_tolerance(
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 dispatch — each branch delegates to a pure function in rules.py.
+# cross-statement dispatch — each branch delegates to a pure function in rules.py.
 # This function never touches an LLM; it only routes a Claim to the right
 # deterministic rule and wraps the CheckResult in a VerificationResult.
 # ---------------------------------------------------------------------------
@@ -482,7 +482,7 @@ def _verify_phase2(claim: Claim) -> VerificationResult:
 
     # Should be unreachable (op was in _PHASE2_OPERATIONS).
     return VerificationResult(claim=claim, status=VerificationStatus.AMBIGUOUS,
-                              explanation=f"unhandled Phase 2 operation {op}")
+                              explanation=f"unhandled cross-statement operation {op}")
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +512,7 @@ def verify_claim(
         )
 
     # ---- UNSUPPORTED_NUMBER: missing operand(s) ---------------------------
-    # This guard is universal (Phase 1 and Phase 2): a missing operand can never
+    # This guard is universal (both the per-claim and cross-statement passes): a missing operand can never
     # be computed with, whatever the operation.
     missing = [o for o in claim.operands if o.source == OperandSource.MISSING]
     if missing:
@@ -522,7 +522,7 @@ def verify_claim(
             explanation=f"{len(missing)} operand(s) could not be located in the source document.",
         )
 
-    # ---- Phase 2 operations: dispatch to rules.py BEFORE the Phase 1
+    # ---- cross-statement operations: dispatch to rules.py BEFORE the summary-audit
     # stated_value assumption (internal_consistency legitimately has none). ---
     if op in _PHASE2_OPERATIONS:
         return _verify_phase2(claim)

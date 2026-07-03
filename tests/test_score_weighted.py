@@ -1,5 +1,5 @@
 """
-Phase 3 / Move 3 test suite — dependency-weighted score.
+multi-document / the weighted score test suite — dependency-weighted score.
 
 Constructed ground truth, no LLM. These pin the two properties the spec demands:
 

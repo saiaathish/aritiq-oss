@@ -1,5 +1,5 @@
 """
-Temporal consistency test suite (Phase 2, §3.2).
+Temporal consistency test suite (cross-statement, §3.2).
 
 trend_direction, superlative, consecutive_count — each tested in the VERIFIED
 and WRONG_MATH directions plus edge cases.  Pure computation over an ordered

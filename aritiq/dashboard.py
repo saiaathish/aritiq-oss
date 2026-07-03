@@ -1,5 +1,5 @@
 """
-Institutional risk dashboard — Phase 3 item 2.
+Institutional risk dashboard — the risk dashboard.
 
 PRESENTATION LOGIC OVER NUMBERS THAT ALREADY EXIST. This module computes
 nothing that is already computed elsewhere:
@@ -8,7 +8,7 @@ nothing that is already computed elsewhere:
   unweighted AritiqScore), called on the recorded verdicts — the weights and
   exclusion rules live in exactly one place and it is not here.
 - Restatement Risk    → counts of `core/restatement.py`'s RestatementType
-  labels on CONFLICT results. Per Move 2's meaning, these are
+  labels on CONFLICT results. Per the restatement classifier's meaning, these are
   disclosure-LANGUAGE classifications, never accounting determinations.
 - Consistency Score   → `company_memory.py`'s deterministic comparability
   signals over cached multi-year XBRL series.

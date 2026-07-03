@@ -6,7 +6,6 @@ import type {
   RiskDashboard,
 } from "./types";
 
-import { createClient } from "./supabase/client";
 
 const getApiUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
@@ -31,66 +30,10 @@ export class ApiError extends Error {
   }
 }
 
-// Module-level singleton + 60s token cache. The Supabase browser client keeps
-// an internal auth state machine; if two callers race (e.g. UserMenu.tsx's
-// getUser() on mount, then authHeader()'s getSession() inside the first Audit
-// click), the in-flight validation can wipe the cached session and getSession()
-// returns null even though cookies hold a valid token. Doing getUser() first
-// until we have a verified session, then caching the resolved access_token so
-// subsequent audits reuse it, eliminates the race without a network call on
-// every keystroke.
-let _supabase: ReturnType<typeof createClient> | null = null;
-let _subbed = false;
-function getClient() {
-  if (!_supabase) _supabase = createClient();
-  if (!_subbed) {
-    _subbed = true;
-    _supabase.auth.onAuthStateChange((_event, session) => {
-      _cachedAuth = session?.access_token
-        ? { token: session.access_token, exp: session.expires_at ?? 0 }
-        : null;
-    });
-  }
-  return _supabase;
-}
-
-type CachedAuth = { token: string; exp: number };
-let _cachedAuth: CachedAuth | null = null;
-
-/** Supabase session JWT for the audit endpoints (they 401 without one). */
+// This build runs entirely locally with no sign-in. The backend needs no auth
+// header, so this is a no-op kept only so callers below have a stable shape.
 async function authHeader(): Promise<Record<string, string>> {
-  const nowS = Math.floor(Date.now() / 1000);
-  // Fast path: cached token with at least 30s of life left.
-  if (_cachedAuth && _cachedAuth.exp - nowS > 30) {
-    return { Authorization: `Bearer ${_cachedAuth.token}` };
-  }
-  const supabase = getClient();
-  try {
-    // getUser() hits the server, validates the JWT, and forces a token
-    // refresh if the stored one is near-expired (THAT is what fixes the
-    // post-OAuth "first audit clicks me back to /login" bug — getSession()
-    // alone reads cookies without validating and can briefly resolve null).
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) return {};
-    const { data: sessionData } = await supabase.auth.getSession();
-    const session = sessionData.session;
-    if (!session?.access_token) return {};
-    _cachedAuth = {
-      token: session.access_token,
-      // Supabase documents the JWT TTL at 1 hour; pin the cache to that so
-      // we never silently hand out a token past its server-known expiry.
-      exp: session.expires_at ?? nowS + 3600,
-    };
-    return { Authorization: `Bearer ${session.access_token}` };
-  } catch {
-    // Transient network error: don't bounce the user to /login if we still
-    // hold a non-expired cached token. Same 30s margin as the fast path so a
-    // token Supabase is about to consider stale isn't handed to the backend.
-    if (_cachedAuth && _cachedAuth.exp - nowS > 30) {
-      return { Authorization: `Bearer ${_cachedAuth.token}` };
-    }
-    return {};
-  }
+  return {};
 }
 
 async function postJson<T>(path: string, body: unknown): Promise<T> {
@@ -110,12 +53,6 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   }
 
   if (!res.ok) {
-    // Session missing/expired -> bounce through login and come back here.
-    if (res.status === 401 && typeof window !== "undefined") {
-      const here = window.location.pathname + window.location.search;
-      window.location.href = `/login?next=${encodeURIComponent(here)}`;
-      throw new ApiError("Please sign in to run audits — redirecting…");
-    }
     let detail = `Request failed (${res.status} ${res.statusText}).`;
     try {
       const data = await res.json();

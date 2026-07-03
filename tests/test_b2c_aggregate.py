@@ -1,5 +1,5 @@
 """
-B2C aggregate_filter test suite (Phase 2, Axis C).
+B2C aggregate_filter test suite (cross-statement, Axis C).
 
 aggregate_filter sums/counts an already-filtered transaction subset, then that
 result composes into the existing percent_change.  The categorization JUDGMENT

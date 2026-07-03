@@ -27,7 +27,7 @@ def _op(value: float, *, source_text: str = "") -> Operand:
 
 
 def _fake_all_phase_audit(documents, summary):
-    # Phase 1: clean arithmetic.
+    # summary-audit: clean arithmetic.
     revenue_growth = Claim(
         claim_text="Revenue grew 20% to $120M",
         operation=Operation.PERCENT_CHANGE,
@@ -37,7 +37,7 @@ def _fake_all_phase_audit(documents, summary):
         node_id="revenue_growth",
     )
 
-    # Phase 2: disclosed restricted-cash tie-out should be INSUFFICIENT_EVIDENCE
+    # cross-statement: disclosed restricted-cash tie-out should be INSUFFICIENT_EVIDENCE
     # (the evidence gate declines to convict), never a confident WRONG_MATH.
     cash_tie = Claim(
         claim_text="cash_flow_tie_out",
@@ -57,7 +57,7 @@ def _fake_all_phase_audit(documents, summary):
         unit="$M",
     )
 
-    # Phase 3 Move 1: root failure with downstream propagated consequence.
+    # multi-document the provenance graph: root failure with downstream propagated consequence.
     bad_base = Claim(
         claim_text="Base revenue was $999M",
         operation=Operation.IDENTITY,
@@ -79,7 +79,7 @@ def _fake_all_phase_audit(documents, summary):
     claims = [revenue_growth, cash_tie, bad_base, downstream]
     results = propagate_errors([verify_claim(c) for c in claims])
 
-    # Phase 2/3 cross-document conflict + restatement disclosure annotation.
+    # cross-statement/3 cross-document conflict + restatement disclosure annotation.
     conflict_claim = Claim(
         claim_text="Cross-document conflict on 'Total revenue / FY2024': A=740, B=710",
         operation=Operation.IDENTITY,

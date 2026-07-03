@@ -10,11 +10,11 @@ Endpoints
 
 Running the audit
 -----------------
-For the bundled examples we replay the saved Day 2 extraction outputs, so the
-demo works with NO API key. For any other (source, summary), we call the real
-extractor, which needs ANTHROPIC_API_KEY (or OPENAI_API_KEY + ARITIQ_PROVIDER).
-If no key is set and the input isn't a bundled example, /audit returns a clear
-503 the UI renders in its error banner.
+For the bundled examples we replay saved extraction outputs, so the demo works
+with NO API key. For any other (source, summary), we call the real extractor,
+which needs your own model key (BYOK) — configure it in a .env file; see
+.env.example. If no key is set and the input isn't a bundled example, /audit
+returns a clear 503 the UI renders in its error banner.
 
 Run:
     pip install -r backend/requirements.txt
@@ -25,17 +25,13 @@ from __future__ import annotations
 import json
 import os
 import threading
-import time
 import re
 import sys
 from contextlib import contextmanager
 from dataclasses import asdict
 from typing import Optional
 
-from dotenv import load_dotenv
-load_dotenv()
-
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
@@ -55,8 +51,11 @@ from aritiq.edgar.timeline import (  # noqa: E402
 from aritiq.dashboard import build_dashboard  # noqa: E402
 from aritiq.edgar.company_memory import build_company_memory  # noqa: E402
 from aritiq.analyst import ask_analyst, ledger_from_records  # noqa: E402
+from aritiq import config  # noqa: E402
 import aritiq.enterprise as enterprise  # noqa: E402
-from backend import rate_limit, supabase_auth  # noqa: E402
+
+# Load BYOK settings (.env) into the environment. See aritiq/config.py.
+config.load()
 
 GOLD_PATH = os.path.join(ROOT, "benchmark", "gold_set.json")
 RUNS_DIR = os.path.join(ROOT, "benchmark", "runs")
@@ -65,13 +64,11 @@ app = FastAPI(title="Aritiq API", version="0.1.0")
 
 MAX_SOURCE_CHARS = int(os.environ.get("ARITIQ_MAX_SOURCE_CHARS", "250000"))
 MAX_SUMMARY_CHARS = int(os.environ.get("ARITIQ_MAX_SUMMARY_CHARS", "20000"))
-RATE_LIMIT_PER_MINUTE = int(os.environ.get("ARITIQ_RATE_LIMIT_PER_MINUTE", "30"))
-_RATE_BUCKETS: dict[str, list[float]] = {}
-_RATE_LOCK = threading.Lock()
 _BYOK_ENV_LOCK = threading.Lock()
 
-# CORS: localhost (any port) for dev, plus an env-driven allowlist for the
-# deployed frontend origin(s), e.g. ARITIQ_ALLOWED_ORIGINS="https://aritiq.app".
+# CORS: this runs locally, so allow any localhost port (the Next.js dev server
+# defaults to :3000). Add extra origins via ARITIQ_ALLOWED_ORIGINS if you host
+# the UI elsewhere.
 _ALLOWED_ORIGINS = [
     o.strip() for o in os.environ.get("ARITIQ_ALLOWED_ORIGINS", "").split(",") if o.strip()
 ]
@@ -82,19 +79,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Emails exempt from the per-user burst/daily audit limits (comma-separated).
-# Kept out of source so the open-source repo ships no personal data.
-UNLIMITED_EMAILS = {
-    e.strip().lower()
-    for e in os.environ.get("ARITIQ_UNLIMITED_EMAILS", "").split(",")
-    if e.strip()
-}
-
-# Explicit opt-in for the old local-dev behavior where requests with no
-# credentials at all fall back to a shared default workspace. NEVER set this
-# in production: it exposes the shared audit history to anonymous callers.
-ALLOW_ANON_DEV = os.environ.get("ARITIQ_ALLOW_ANON_DEV", "").lower() in ("1", "true", "yes")
 
 
 # ---------------------------------------------------------------------------
@@ -129,150 +113,16 @@ def _replay_fn_for(doc_id: str):
 
 
 def _has_live_key() -> bool:
-    provider = (os.environ.get("ARITIQ_PROVIDER") or "anthropic").lower()
-    if provider == "gemini":
-        return bool(os.environ.get("GEMINI_API_KEY"))
-    if provider == "groq":
-        return bool(os.environ.get("GROQ_API_KEY"))
-    return bool(
-        os.environ.get("ANTHROPIC_API_KEY") if provider == "anthropic"
-        else os.environ.get("OPENAI_API_KEY")
-    )
+    """True when a model key is configured for the selected provider."""
+    return config.has_key()
 
 
-def _configured_api_keys() -> set[str]:
-    raw = os.environ.get("ARITIQ_API_KEYS", "")
-    return {k.strip() for k in raw.split(",") if k.strip()}
-
-
-def _client_id(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
-def _extract_credentials(
-    x_api_key: Optional[str], authorization: Optional[str]
-) -> tuple[str, str]:
-    """Return (bearer, supplied) from the two credential headers."""
-    bearer = ""
-    if authorization and authorization.lower().startswith("bearer "):
-        bearer = authorization.split(" ", 1)[1].strip()
-    return bearer, (x_api_key or bearer)
-
-
-def _api_key_ctx(request: Request, supplied: str) -> Optional[enterprise.AuthContext]:
-    """AuthContext for an enterprise or legacy (ARITIQ_API_KEYS) key, or None."""
-    ent_ctx = enterprise.authenticate(supplied)
-    if ent_ctx is not None:
-        _apply_rate_limit(f"key:{ent_ctx.api_key_id}", ent_ctx.limit_per_minute)
-        enterprise.record_usage(ent_ctx, request.method, request.url.path)
-        return ent_ctx
-    if supplied and supplied in _configured_api_keys():
-        with enterprise.connect() as conn:
-            ctx = enterprise.ensure_default_workspace(conn)
-        _apply_rate_limit(f"legacy:{supplied[:12]}", RATE_LIMIT_PER_MINUTE)
-        return ctx
-    return None
-
-
-def _supabase_ctx(request: Request, bearer: str) -> Optional[enterprise.AuthContext]:
-    """AuthContext for a verified Supabase session token, or None.
-
-    Each Supabase account gets its OWN org+user (keyed by the token's `sub`),
-    so audit history is isolated per user — never the shared default workspace.
-    """
-    payload = supabase_auth.verify_supabase_token(bearer) if bearer else None
-    if payload is None:
-        return None
-    sub = payload.get("sub")
-    if not sub:
-        return None
-    request.state.user_id = sub
-    request.state.email = payload.get("email")
+# Everything runs locally, so there is no sign-in and no multi-tenant identity.
+# All requests share a single local workspace (used only for optional on-disk
+# audit history in a local SQLite file under your XDG state dir).
+def local_ctx() -> enterprise.AuthContext:
     with enterprise.connect() as conn:
-        ctx = enterprise.ensure_supabase_workspace(
-            conn, sub, email=payload.get("email")
-        )
-    _apply_rate_limit(f"user:{sub}", RATE_LIMIT_PER_MINUTE)
-    return ctx
-
-
-def require_api_key(
-    request: Request,
-    x_api_key: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> enterprise.AuthContext:
-    """Auth for data/history endpoints (/enterprise/*, /dashboard, /analyst,
-    /timeline). Accepts an enterprise key, a legacy ARITIQ_API_KEYS key, or a
-    signed-in Supabase user (scoped to their own workspace). Anonymous access
-    is rejected unless ARITIQ_ALLOW_ANON_DEV is explicitly set for local dev.
-    """
-    bearer, supplied = _extract_credentials(x_api_key, authorization)
-
-    ctx = _api_key_ctx(request, supplied)
-    if ctx is not None:
-        return ctx
-
-    ctx = _supabase_ctx(request, bearer)
-    if ctx is not None:
-        return ctx
-
-    if not supplied and ALLOW_ANON_DEV:
-        with enterprise.connect() as conn:
-            ctx = enterprise.ensure_default_workspace(conn)
-        _apply_rate_limit(f"ip:{_client_id(request)}", RATE_LIMIT_PER_MINUTE)
-        return ctx
-
-    raise HTTPException(status_code=401, detail="Invalid or missing API key.")
-
-
-def require_user(
-    request: Request,
-    x_api_key: Optional[str] = Header(default=None),
-    authorization: Optional[str] = Header(default=None),
-) -> enterprise.AuthContext:
-    """Auth for endpoints that spend model tokens (/audit, /audit-multi,
-    /audit-ticker). Enterprise/legacy API keys keep working for scripted
-    access; everyone else must be a signed-in Supabase user, rate-limited per
-    user id (burst + daily) rather than per IP. No anonymous fallback."""
-    bearer, supplied = _extract_credentials(x_api_key, authorization)
-
-    ctx = _api_key_ctx(request, supplied)
-    if ctx is not None:
-        return ctx
-
-    ctx = _supabase_ctx(request, bearer)
-    if ctx is not None:
-        return ctx
-
-    raise HTTPException(
-        status_code=401,
-        detail="Sign in with Google to run audits.",
-    )
-
-
-def _enforce_user_rate_limit(request: Request) -> None:
-    """Burst + daily limits for Supabase users; exempt ARITIQ_UNLIMITED_EMAILS."""
-    user_id = getattr(request.state, "user_id", None)
-    email = (getattr(request.state, "email", None) or "").lower()
-    if user_id and email not in UNLIMITED_EMAILS:
-        try:
-            rate_limit.check_rate_limit(user_id)
-        except rate_limit.RateLimitExceeded as exc:
-            raise HTTPException(status_code=429, detail=str(exc))
-
-
-def _apply_rate_limit(bucket_id: str, limit_per_minute: int) -> None:
-    now = time.time()
-    window_start = now - 60
-    with _RATE_LOCK:
-        bucket = [t for t in _RATE_BUCKETS.get(bucket_id, []) if t >= window_start]
-        if len(bucket) >= int(limit_per_minute):
-            raise HTTPException(status_code=429, detail="Rate limit exceeded. Try again later.")
-        bucket.append(now)
-        _RATE_BUCKETS[bucket_id] = bucket
+        return enterprise.ensure_default_workspace(conn)
 
 
 def _provider_key_name(provider: str) -> str:
@@ -299,7 +149,7 @@ def _temporary_byok(provider: Optional[str], api_key: Optional[str]):
     if not api_key:
         yield
         return
-    key_name = _provider_key_name(provider or os.environ.get("ARITIQ_PROVIDER") or "gemini")
+    key_name = _provider_key_name(provider or config.provider())
     if not key_name:
         raise HTTPException(status_code=400, detail="Unsupported provider for BYOK.")
     with _BYOK_ENV_LOCK:
@@ -325,7 +175,7 @@ def _serialize_result(r: VerificationResult) -> dict:
         "recomputed_value": r.recomputed_value,
         "delta": r.delta,
         "explanation": r.explanation,
-        # ---- Phase 3 fields (None for ordinary per-claim verdicts) ----
+        # ---- multi-document fields (None for ordinary per-claim verdicts) ----
         "caused_by": r.caused_by,
         "restatement_type": r.restatement_type.value if r.restatement_type else None,
         "claim": {
@@ -433,28 +283,6 @@ class TickerAuditRequest(BaseModel):
         return v
 
 
-class BootstrapRequest(BaseModel):
-    org_name: str = "Aritiq workspace"
-    user_email: str
-    user_name: Optional[str] = None
-    key_label: str = "Initial key"
-    limit_per_minute: int = RATE_LIMIT_PER_MINUTE
-
-
-class ApiKeyCreateRequest(BaseModel):
-    label: str = "API key"
-    limit_per_minute: int = RATE_LIMIT_PER_MINUTE
-
-
-class WatchlistCreateRequest(BaseModel):
-    ticker: str
-
-
-class WebhookCreateRequest(BaseModel):
-    url: str
-    secret: Optional[str] = None
-
-
 @app.get("/health")
 @app.head("/health")
 def health():
@@ -466,165 +294,11 @@ def examples():
     return EXAMPLES
 
 
-@app.post("/enterprise/bootstrap")
-def bootstrap_enterprise(req: BootstrapRequest):
-    """Create first minimal team workspace plus initial API key.
-
-    This is deliberately not OAuth or billing. It is a local/team bootstrap
-    primitive for small SEC-research teams.
-    """
-    if not req.user_email.strip():
-        raise HTTPException(status_code=400, detail="user_email required.")
-    if req.limit_per_minute < 1:
-        raise HTTPException(status_code=400, detail="limit_per_minute must be positive.")
-    return enterprise.create_workspace(
-        req.org_name,
-        req.user_email,
-        user_name=req.user_name,
-        key_label=req.key_label,
-        limit_per_minute=req.limit_per_minute,
-    )
-
-
-@app.get("/enterprise/team")
-def enterprise_team(ctx: enterprise.AuthContext = Depends(require_api_key)):
-    with enterprise.connect() as conn:
-        org = conn.execute("SELECT id, name, created_at FROM orgs WHERE id = ?", (ctx.org_id,)).fetchone()
-        users = conn.execute(
-            "SELECT id, org_id, email, name, created_at FROM users WHERE org_id = ? ORDER BY id",
-            (ctx.org_id,),
-        ).fetchall()
-    return {"org": dict(org), "users": [dict(u) for u in users], "auth": ctx.to_dict()}
-
-
-@app.get("/enterprise/api-keys")
-def enterprise_api_keys(ctx: enterprise.AuthContext = Depends(require_api_key)):
-    return enterprise.api_key_dashboard(ctx.org_id)
-
-
-@app.post("/enterprise/api-keys")
-def enterprise_create_api_key(
-    req: ApiKeyCreateRequest,
-    ctx: enterprise.AuthContext = Depends(require_api_key),
-):
-    if req.limit_per_minute < 1:
-        raise HTTPException(status_code=400, detail="limit_per_minute must be positive.")
-    return enterprise.create_api_key(
-        ctx.org_id,
-        user_id=ctx.user_id,
-        label=req.label,
-        limit_per_minute=req.limit_per_minute,
-    )
-
-
-@app.post("/enterprise/api-keys/{key_id}/rotate")
-def enterprise_rotate_api_key(key_id: int, ctx: enterprise.AuthContext = Depends(require_api_key)):
-    try:
-        return enterprise.rotate_api_key(key_id, ctx.org_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-
-
-@app.post("/enterprise/api-keys/{key_id}/deactivate")
-def enterprise_deactivate_api_key(key_id: int, ctx: enterprise.AuthContext = Depends(require_api_key)):
-    try:
-        enterprise.deactivate_api_key(key_id, ctx.org_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
-    return {"status": "disabled", "id": key_id}
-
-
-@app.get("/enterprise/audits")
-def enterprise_audit_history(
-    limit: int = 50,
-    ctx: enterprise.AuthContext = Depends(require_api_key),
-):
-    if limit < 1 or limit > 500:
-        raise HTTPException(status_code=400, detail="limit must be 1..500.")
-    return {"audits": enterprise.list_audits(ctx.org_id, limit=limit)}
-
-
-@app.get("/enterprise/audits/{audit_id}")
-def enterprise_audit_detail(audit_id: int, ctx: enterprise.AuthContext = Depends(require_api_key)):
-    audit_record = enterprise.get_audit(ctx.org_id, audit_id)
-    if not audit_record:
-        raise HTTPException(status_code=404, detail="audit not found")
-    return audit_record
-
-
-@app.get("/enterprise/watchlists")
-def enterprise_watchlists(ctx: enterprise.AuthContext = Depends(require_api_key)):
-    return {"watchlists": enterprise.list_watchlists(ctx.org_id)}
-
-
-@app.post("/enterprise/watchlists")
-def enterprise_add_watchlist(
-    req: WatchlistCreateRequest,
-    ctx: enterprise.AuthContext = Depends(require_api_key),
-):
-    ticker = (req.ticker or "").strip().upper()
-    if not ticker:
-        raise HTTPException(status_code=400, detail="ticker required.")
-    return enterprise.add_watchlist(ctx.org_id, ticker)
-
-
-@app.post("/enterprise/watchlists/check")
-def enterprise_check_watchlists(ctx: enterprise.AuthContext = Depends(require_api_key)):
-    detected = []
-    for item in enterprise.list_watchlists(ctx.org_id):
-        tl = get_timeline(item["ticker"], limit=1)
-        if tl.fetch_error or not tl.events:
-            enterprise.update_watchlist_seen(ctx.org_id, item["id"], item.get("last_seen_accession"))
-            continue
-        latest = tl.events[0]
-        filing = {
-            "form": latest.form,
-            "filing_date": latest.filing_date,
-            "report_date": latest.report_date,
-            "accession": latest.accession,
-            "items": latest.items,
-            "verification_coverage": latest.verification_coverage,
-            "document_url": latest.document_url(tl.cik) if tl.cik else None,
-            "description": latest.primary_doc_description,
-        }
-        if item.get("last_seen_accession") and item.get("last_seen_accession") != latest.accession:
-            queued = enterprise.enqueue_webhook_deliveries(
-                ctx.org_id,
-                watchlist_id=item["id"],
-                ticker=item["ticker"],
-                accession=latest.accession,
-                filing=filing,
-            )
-            detected.append({"ticker": item["ticker"], "filing": filing, "webhooks_queued": queued})
-        enterprise.update_watchlist_seen(ctx.org_id, item["id"], latest.accession)
-    return {"detected": detected}
-
-
-@app.get("/enterprise/webhooks")
-def enterprise_webhooks(ctx: enterprise.AuthContext = Depends(require_api_key)):
-    return {"webhooks": enterprise.list_webhooks(ctx.org_id)}
-
-
-@app.post("/enterprise/webhooks")
-def enterprise_add_webhook(
-    req: WebhookCreateRequest,
-    ctx: enterprise.AuthContext = Depends(require_api_key),
-):
-    if not req.url.startswith(("http://", "https://")):
-        raise HTTPException(status_code=400, detail="webhook url must be http(s).")
-    return enterprise.add_webhook(ctx.org_id, req.url, secret=req.secret)
-
-
-@app.post("/enterprise/webhooks/dispatch")
-def enterprise_dispatch_webhooks(ctx: enterprise.AuthContext = Depends(require_api_key)):
-    return enterprise.dispatch_due_webhooks(ctx.org_id)
-
-
 @app.post("/audit")
 def audit_endpoint(
     req: AuditRequest,
     request: Request,
-    ctx: enterprise.AuthContext = Depends(require_user),
+    ctx: enterprise.AuthContext = Depends(local_ctx),
 ):
     if not req.source.strip() or not req.summary.strip():
         raise HTTPException(status_code=400, detail="Both source and summary are required.")
@@ -639,18 +313,16 @@ def audit_endpoint(
         )
         return payload
 
-    # Enforce rate limits for custom audits
-    _enforce_user_rate_limit(request)
 
     # 2) Novel input -> live extraction (requires a key).
     if not _has_live_key() and not req.api_key:
         raise HTTPException(
             status_code=503,
             detail=(
-                "No model API key configured on the server, so custom documents can't be "
-                "audited yet. Set ANTHROPIC_API_KEY (or OPENAI_API_KEY with "
-                "ARITIQ_PROVIDER=openai) and restart the backend — or click “Load example” "
-                "to try Aritiq with a bundled document, which needs no key."
+                "No model API key configured, so custom documents can't be audited "
+                "yet. Set your provider and key in a .env file (see .env.example) and "
+                "restart the backend — or click “Load example” to try Aritiq with a "
+                "bundled document, which needs no key."
             ),
         )
 
@@ -668,9 +340,9 @@ def audit_endpoint(
 def audit_multi_endpoint(
     req: MultiAuditRequest,
     request: Request,
-    _auth: enterprise.AuthContext = Depends(require_user),
+    _auth: enterprise.AuthContext = Depends(local_ctx),
 ):
-    """Audit a summary against MULTIPLE labeled source documents (Phase 3).
+    """Audit a summary against MULTIPLE labeled source documents (multi-document).
 
     Unlike /audit, this builds a document registry so claims ground to the
     document they describe (not first-match across a concatenated blob), runs
@@ -679,7 +351,6 @@ def audit_multi_endpoint(
 
     Requires a live model key (no replay path for arbitrary multi-doc input).
     """
-    _enforce_user_rate_limit(request)
 
     if not req.documents or not req.summary.strip():
         raise HTTPException(status_code=400, detail="At least one document and a summary are required.")
@@ -687,9 +358,9 @@ def audit_multi_endpoint(
         raise HTTPException(
             status_code=503,
             detail=(
-                "No model API key configured on the server, so multi-document audits "
-                "can't run yet. Set ANTHROPIC_API_KEY (or OPENAI_API_KEY with "
-                "ARITIQ_PROVIDER=openai) and restart the backend."
+                "No model API key configured, so multi-document audits can't run "
+                "yet. Set your provider and key in a .env file (see .env.example) and "
+                "restart the backend."
             ),
         )
     docs = [
@@ -708,7 +379,7 @@ def audit_multi_endpoint(
 def audit_ticker_endpoint(
     req: TickerAuditRequest,
     request: Request,
-    ctx: enterprise.AuthContext = Depends(require_user),
+    ctx: enterprise.AuthContext = Depends(local_ctx),
 ):
     """Audit a company's latest 10-K by ticker — the "type AAPL, hit Audit" flow.
 
@@ -718,7 +389,6 @@ def audit_ticker_endpoint(
     tie-out) — the strongest no-summary demo. With a `summary`, it audits that
     summary against the real filing.
     """
-    _enforce_user_rate_limit(request)
 
     ticker = (req.ticker or "").strip()
     if not ticker:
@@ -815,8 +485,8 @@ def _latest_replay_claim_records(ticker: str) -> Optional[list]:
 
 
 @app.get("/dashboard/{ticker}")
-def dashboard_endpoint(ticker: str, _auth: None = Depends(require_api_key)):
-    """Institutional risk dashboard (Phase 3 item 2) — deterministic panels
+def dashboard_endpoint(ticker: str, _auth: None = Depends(local_ctx)):
+    """Institutional risk dashboard (the risk dashboard) — deterministic panels
     over the newest benchmark replay's verdicts + cached company memory.
 
     Presentation only: verification score is core/score.py's AritiqScore,
@@ -859,8 +529,8 @@ class AnalystRequest(BaseModel):
 
 
 @app.post("/analyst")
-def analyst_endpoint(req: AnalystRequest, _auth: None = Depends(require_api_key)):
-    """AI Analyst Mode (Phase 3 item 3) — answers ONLY from claims that passed
+def analyst_endpoint(req: AnalystRequest, _auth: None = Depends(local_ctx)):
+    """AI Analyst Mode (analyst mode) — answers ONLY from claims that passed
     verification, cites them, and refuses when the relevant number is blocked.
 
     The refusal gates are deterministic and run BEFORE any model call, so a
@@ -919,9 +589,9 @@ def timeline_endpoint(
     ticker: str,
     forms: Optional[str] = None,
     limit: int = 200,
-    _auth: None = Depends(require_api_key),
+    _auth: None = Depends(local_ctx),
 ):
-    """Sequence a company's SEC filings by type and date (Phase 3 item 1).
+    """Sequence a company's SEC filings by type and date (filing-timeline).
 
     Every event carries a `verification_coverage` label, and the response ships
     the legend explaining exactly what Aritiq verifies per filing type — 10-K/

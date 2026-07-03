@@ -2,14 +2,14 @@
 Aritiq claim schema — the atomic unit the verifier operates on.
 No LLM is imported or referenced anywhere in this file or the verifier.
 
-Phase 2 note
+Design note
 ------------
-This file grew in Phase 2, but only additively.  Every new Operation, every new
-OperandSource, and every new optional Claim field defaults so that a Phase 1
-Claim constructed exactly as before behaves exactly as before.  The Phase 1
+This file grew in the cross-statement pass, but only additively.  Every new Operation, every new
+OperandSource, and every new optional Claim field defaults so that a summary-audit
+Claim constructed exactly as before behaves exactly as before.  The summary-audit
 test suite passes untouched; that invariance is the evidence the firewall design
 held.  Nothing below imports an LLM, and nothing below ever will — the whole
-point of Phase 2 is to *widen* the deterministic zone, not to smuggle judgment
+point of the cross-statement pass is to *widen* the deterministic zone, not to smuggle judgment
 into it.
 """
 from __future__ import annotations
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 
 
 class Operation(str, Enum):
-    # ---- Phase 1 arithmetic operations (unchanged) ------------------------
+    # ---- summary-audit arithmetic operations (unchanged) ------------------------
     PERCENT_CHANGE  = "percent_change"
     ABSOLUTE_CHANGE = "absolute_change"
     SUM             = "sum"
@@ -32,7 +32,7 @@ class Operation(str, Enum):
     IDENTITY        = "identity"
     UNSUPPORTED     = "unsupported"   # qualitative / no formula
 
-    # ---- Phase 2 additions (each still a pure function, no model) ---------
+    # ---- cross-statement additions (each still a pure function, no model) ---------
     # §3.3 Cross-statement consistency: "do the document's own numbers agree?"
     INTERNAL_CONSISTENCY = "internal_consistency"
     # §3.2 Temporal consistency over an ordered (period, value) series.
@@ -48,12 +48,12 @@ class Operation(str, Enum):
 
 
 class OperandSource(str, Enum):
-    # ---- Phase 1 provenance (unchanged) -----------------------------------
+    # ---- summary-audit provenance (unchanged) -----------------------------------
     GROUNDED = "grounded"   # found verbatim in source document
     INFERRED = "inferred"   # derived (e.g. unit conversion) but traceable
     MISSING  = "missing"    # extractor could not locate it
 
-    # ---- Phase 2 provenance (§2.2, §3.4, Axis C) --------------------------
+    # ---- cross-statement provenance (§2.2, §3.4, Axis C) --------------------------
     # A grounding against a structured TABLE CELL is a stronger, more auditable
     # claim than a prose-string match, so it gets its own provenance type
     # (roadmap §2.2: "grounded_table_cell vs grounded_prose").
@@ -91,7 +91,7 @@ class EPSVariant(str, Enum):
 
 
 class RestatementType(str, Enum):
-    """Phase 3 / Move 2 — how a cross-document CONFLICT is annotated.
+    """the restatement classifier — how a cross-document CONFLICT is annotated.
 
     IMPORTANT framing: this enum does NOT determine *what kind of restatement*
     occurred.  It records whether explicit restatement/reclassification DISCLOSURE
@@ -119,14 +119,14 @@ class RestatementType(str, Enum):
 
 
 class VerificationStatus(str, Enum):
-    # ---- Phase 1 statuses (unchanged) -------------------------------------
+    # ---- summary-audit statuses (unchanged) -------------------------------------
     VERIFIED            = "VERIFIED"             # math checks out within tolerance
     WRONG_MATH          = "WRONG_MATH"           # grounded operands, recomputation disagrees
     UNSUPPORTED_NUMBER  = "UNSUPPORTED_NUMBER"   # at least one operand is missing
     AMBIGUOUS           = "AMBIGUOUS"            # divide-by-zero, bad operand count, multi-reading
     UNCHECKED           = "UNCHECKED"            # operation is UNSUPPORTED (qualitative)
 
-    # ---- Phase 2 statuses -------------------------------------------------
+    # ---- cross-statement statuses -------------------------------------------------
     # §3.4 / §7: a qualitative word sits next to a number ("costs were flat" +
     # a 4% table delta).  We do NOT invent a numeric threshold; we surface it
     # for a human.  This is deliberately distinct from UNCHECKED: UNCHECKED is
@@ -150,13 +150,13 @@ class VerificationStatus(str, Enum):
     # exactly one thing; an operand-selection mistake must not masquerade as one.
     INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"
 
-    # ---- Phase 3 statuses -------------------------------------------------
-    # Move 1 (provenance graph): this claim is not independently broken — its
+    # ---- multi-document statuses -------------------------------------------------
+    # the provenance graph (provenance graph): this claim is not independently broken — its
     # operands traced back, through the depends_on graph, to a claim that IS
     # broken (WRONG_MATH / UNSUPPORTED_NUMBER).  It is a CONSEQUENCE of a root
     # failure, not a separate failure.  Carrying it as its own status lets a
     # reviewer see "one root cause, N consequences" instead of N flat flags, and
-    # lets scoring (Move 3) avoid double-penalizing the same root error N times.
+    # lets scoring (the weighted score) avoid double-penalizing the same root error N times.
     # A claim that ALSO fails independently keeps its own WRONG_MATH — we never
     # overwrite a genuinely-broken claim with a label implying its only problem
     # is upstream.
@@ -187,7 +187,7 @@ class Operand:
     source_text: Optional[str] = None   # verbatim string from source document
     source_span: Optional[tuple] = None # (start, end) char offsets if available
 
-    # ---- Phase 2 provenance extensions (all optional, default off) --------
+    # ---- cross-statement provenance extensions (all optional, default off) --------
     doc_id: Optional[str] = None        # §2.2: which registry document the operand came from
     table_cell: Optional[TableCell] = None  # §2.1: the grounded cell, if grounded against a table
     category: Optional[str] = None      # Axis C: the inferred category, when source == CATEGORY_INFERRED
@@ -204,7 +204,7 @@ class Claim:
     source_text: Optional[str] = None       # relevant excerpt from source doc
     notes: Optional[str] = None
 
-    # ---- Phase 2 fields (all optional; Phase 1 claims never set them) ------
+    # ---- cross-statement fields (all optional; summary-audit claims never set them) ------
     # §3.3: which named internal-consistency rule this claim checks.  Used only
     # when operation == INTERNAL_CONSISTENCY.
     rule_name: Optional[str] = None
@@ -220,7 +220,7 @@ class Claim:
     # verifier logic reads explicitly.
     params: Dict[str, Any] = field(default_factory=dict)
 
-    # ---- Phase 3 fields (Move 1 — provenance graph; all optional) ----------
+    # ---- multi-document fields (provenance graph; all optional) ----------
     # A stable identifier for THIS claim's output value, usable as a dependency
     # target by other claims.  Optional: a claim with no node_id simply cannot
     # be depended upon (it can still depend on others, but in practice the
@@ -229,8 +229,8 @@ class Claim:
     # The node_ids this claim's operands were sourced from, WHEN an operand is
     # itself the stated output of another claim rather than a raw source figure.
     # Empty (the default) ⇒ this is a LEAF claim: it depends only on raw grounded
-    # numbers and behaves exactly as it did before Phase 3.  This field is the
-    # entire input to graph construction; everything else about Move 1 is derived
+    # numbers and behaves exactly as it did before the multi-document pass.  This field is the
+    # entire input to graph construction; everything else about the provenance graph is derived
     # from it.  It is supplied by EXTRACTION (the extractor decides two claims
     # share a number), never inferred by the verifier.
     depends_on: List[str] = field(default_factory=list)
@@ -244,14 +244,14 @@ class VerificationResult:
     delta: Optional[float] = None           # stated_value - recomputed_value
     explanation: str = ""
 
-    # ---- Phase 3 field (Move 1 — provenance graph; optional) ---------------
+    # ---- multi-document field (provenance graph; optional) ---------------
     # When status == PROPAGATED_ERROR, this points at the node_id of the ROOT
     # claim whose failure caused this one, so the UI can render "this number is
     # wrong because claim X is wrong" instead of another flat flag.  None for
     # every other status.
     caused_by: Optional[str] = None
 
-    # ---- Phase 3 field (Move 2 — restatement classification; optional) -----
+    # ---- multi-document field (restatement classification; optional) -----
     # When status == CONFLICT, this carries the disclosure-language annotation
     # (EXPLICIT_RESTATEMENT / POSSIBLE_RECLASSIFICATION / UNEXPLAINED) for the
     # cross-document disagreement.  None for every other status.  Remember this
@@ -263,7 +263,7 @@ class VerificationResult:
 # ---------------------------------------------------------------------------
 # Source registry (§2.2) — infrastructure, not a feature.
 # ---------------------------------------------------------------------------
-# Phase 1 assumed "the source document": a single text string both operands of
+# summary-audit assumed "the source document": a single text string both operands of
 # a claim live in.  That assumption breaks the moment a claim spans filings
 # ("revenue grew 12% YoY": this year is the current 10-Q, last year a prior
 # one).  The registry replaces the single string with a small keyed collection

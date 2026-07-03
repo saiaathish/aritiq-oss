@@ -1,5 +1,5 @@
 """
-Cross-document conflict-figure extraction tests (Phase 3 prose path).
+Cross-document conflict-figure extraction tests (multi-document prose path).
 
 This is the step that makes a cross-document CONFLICT fire on PROSE input (the
 live UI case), not only on pre-parsed TableCells. The extractor is an LLM step,

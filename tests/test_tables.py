@@ -1,5 +1,5 @@
 """
-Table extraction + unit normalization test suite (Phase 2, §2.1, §2.2).
+Table extraction + unit normalization test suite (cross-statement, §2.1, §2.2).
 
 Pure deterministic parsing; no LLM. Tests cover:
   - parsing a pipe/markdown table into labelled cells

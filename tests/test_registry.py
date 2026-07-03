@@ -1,5 +1,5 @@
 """
-Source registry test suite (Phase 2, §2.2 and §7).
+Source registry test suite (cross-statement, §2.2 and §7).
 
 The registry makes multi-document claims *representable* and surfaces the one
 new failure mode it introduces: two documents disagreeing on the same figure

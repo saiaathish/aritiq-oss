@@ -1,8 +1,8 @@
 """
-Cross-statement consistency extraction (Phase 2, spec §3).
+Cross-statement consistency extraction (cross-statement, spec §3).
 
 This is the ONLY new place an LLM runs for the cross-statement feature, and the
-job is *narrower* than Phase 1 claim extraction, not broader: locate and ground
+job is *narrower* than summary-audit claim extraction, not broader: locate and ground
 a fixed, small set of figures, and never compute anything.  Whether the numbers
 agree is decided entirely downstream by aritiq.core.rules — pure code.
 

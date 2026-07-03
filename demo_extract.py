@@ -1,12 +1,15 @@
 """
-Aritiq Day 2 demo — the full pipeline on one document.
+Aritiq full-pipeline demo — the whole flow on one document.
 
 By default this runs OFFLINE: it replays a saved model extraction (no API key
 needed) so anyone can see source -> extract -> verify -> score end to end, with
 every claim's operands and recomputation laid out for inspection.
 
     python demo_extract.py            # offline replay (default)
-    python demo_extract.py --live     # call a real model (needs ANTHROPIC_API_KEY)
+    python demo_extract.py --live     # call your configured model (needs a key)
+
+With --live, Aritiq uses your BYOK settings from .env (ARITIQ_PROVIDER plus the
+matching *_API_KEY). See .env.example.
 
 The point to notice: the extractor faithfully reports a claim whose math is
 wrong ("a 30% increase" when the real change is 25%), and the deterministic
@@ -16,6 +19,7 @@ import argparse
 import json
 import os
 
+from aritiq import config
 from aritiq.pipeline import audit
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +38,7 @@ def main():
     args = ap.parse_args()
 
     if args.live:
+        config.load()
         complete_fn = None
         mode = "LIVE"
     else:

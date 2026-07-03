@@ -1,6 +1,6 @@
 """Offline tests for GET /timeline/{ticker} — synthetic timeline, no network.
 
-Pins the surfacing contract of Phase 3 item 1: the coverage label travels WITH
+Pins the surfacing contract of filing-timeline: the coverage label travels WITH
 every event and the legend ships in the response, so no client can imply
 verification coverage that doesn't exist.
 """
@@ -116,5 +116,6 @@ def test_timeline_unknown_ticker_404(monkeypatch):
     assert client.get("/timeline/ZZZQ", headers=AUTH_HEADERS).status_code == 404
 
 
-def test_timeline_requires_auth(client):
-    assert client.get("/timeline/FAKE").status_code == 401
+def test_timeline_open_access(client):
+    # Local-first build: no sign-in, endpoints are open.
+    assert client.get("/timeline/FAKE").status_code == 200

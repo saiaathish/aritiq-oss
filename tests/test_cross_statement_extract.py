@@ -1,8 +1,8 @@
 """
-Cross-statement EXTRACTION tests (Phase 2, spec §3).
+Cross-statement EXTRACTION tests (cross-statement, spec §3).
 
 No LLM / no API key — every model response is injected as a string through a
-fake complete_fn, exactly like the Phase 1 extraction tests.
+fake complete_fn, exactly like the summary-audit extraction tests.
 
 These pin the two things that keep this feature honest:
   1. the new schema fields (rule_name, eps_variant, operand category) survive

@@ -1,5 +1,5 @@
 """
-Cross-statement consistency test suite (Phase 2, spec §5).
+Cross-statement consistency test suite (cross-statement, spec §5).
 
 Day-1-style discipline: these tests are written against the rule functions and
 the verifier directly, with constructed ground truth.  No LLM, no API key.
@@ -175,7 +175,7 @@ class TestStatedValueNone:
         c = ic_claim("balance_sheet_identity", [1500.0, 900.0, 600.0])
         assert c.stated_value is None          # confirm the schema allows it
         r = verify_claim(c)
-        # ... and it does NOT collapse to the Phase 1 "no stated_value" AMBIGUOUS.
+        # ... and it does NOT collapse to the summary-audit "no stated_value" AMBIGUOUS.
         assert r.status == VerificationStatus.VERIFIED
 
 

@@ -1,5 +1,5 @@
 """
-Phase 3 / Move 2 — restatement DISCLOSURE-LANGUAGE classification.
+the restatement classifier — restatement DISCLOSURE-LANGUAGE classification.
 
 THIS FILE CONTAINS NO LLM CALLS, and — just as importantly — makes no accounting
 determination.  It performs a deterministic string/regex lookup for explicit
@@ -8,7 +8,7 @@ already-disagreeing figure, and reports which (if any) was found.
 
 What this solves, and what it deliberately does NOT
 ---------------------------------------------------
-Phase 2's registry surfaces a CONFLICT: two documents disagree on a number.  It
+the document registry surfaces a CONFLICT: two documents disagree on a number.  It
 does not say *why* — a prior-period correction, a reclassification, and a
 segment realignment all look identical as a flat numeric disagreement, yet they
 mean very different things to a reader.

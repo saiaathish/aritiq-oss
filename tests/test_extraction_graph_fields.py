@@ -1,4 +1,4 @@
-"""Extraction support for Phase 3 provenance graph fields."""
+"""Extraction support for multi-document provenance graph fields."""
 
 from aritiq.extract import parse_claims
 from aritiq.extract.prompt import SYSTEM_PROMPT

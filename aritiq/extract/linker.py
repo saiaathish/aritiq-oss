@@ -1,5 +1,5 @@
 """
-Deterministic depends_on linker (Phase 2, item 1).
+Deterministic depends_on linker (cross-statement, item 1).
 
 WHY THIS EXISTS
 ---------------

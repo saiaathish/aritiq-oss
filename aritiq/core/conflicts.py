@@ -72,7 +72,7 @@ def conflicts_to_results(
 ) -> List[VerificationResult]:
     """Detect cross-document conflicts in `registry` and return CONFLICT verdicts.
 
-    For each disagreement `find_conflicts` reports, optionally run the Move 2
+    For each disagreement `find_conflicts` reports, optionally run the the restatement classifier
     disclosure-language scan against the documents involved, then emit a
     `VerificationResult` with status `CONFLICT` carrying:
       * an auditable claim shell (both values + their doc_ids),

@@ -15,7 +15,7 @@ Weight table:
   AMBIGUOUS          → 0.4   (partial; structural issue)
   UNCHECKED          → excluded from denominator entirely
 
-Phase 2 statuses:
+cross-statement statuses:
   NEEDS_REVIEW → excluded from the denominator, like UNCHECKED. The claim was
                  routed to a human precisely because code can't (and shouldn't)
                  judge it; scoring it either way would fabricate a verdict where
@@ -24,17 +24,17 @@ Phase 2 statuses:
                  figure, a derived number built on it is not trustworthy — the
                  reader should treat it as a red flag, not a partial pass.
 
-Phase 3 statuses (Move 1 + Move 3):
+multi-document statuses (provenance graph + weighted score):
   PROPAGATED_ERROR → EXCLUDED from independent scoring entirely. It is a
                  CONSEQUENCE of a root failure, not a separate failure; counting
                  it would penalize the same root error N times. Its cost is paid
                  once, at the root, via the dependency weight below.
 
-Dependency weighting (Move 3)
+Dependency weighting (the weighted score)
 -----------------------------
 The flat score above weights every claim equally regardless of where it sits in
 a derivation chain.  But a WRONG_MATH on a number fourteen other claims depend on
-is worse than one on an isolated leaf.  Move 1's graph lets us measure that, so
+is worse than one on an isolated leaf.  the provenance graph's graph lets us measure that, so
 `compute_score` ALSO produces a dependency-weighted score:
 
   * each root claim's contribution is weighted by
@@ -66,10 +66,10 @@ WEIGHTS = {
     VerificationStatus.UNSUPPORTED_NUMBER: 0.4,
     VerificationStatus.AMBIGUOUS:          0.4,
     VerificationStatus.UNCHECKED:          None,  # excluded
-    # ---- Phase 2 ----
+    # ---- cross-statement ----
     VerificationStatus.NEEDS_REVIEW:       None,  # excluded — a human decides
     VerificationStatus.CONFLICT:           0.0,   # source disagreement = red flag
-    # ---- Phase 3 ----
+    # ---- multi-document ----
     VerificationStatus.PROPAGATED_ERROR:   None,  # excluded — counted at the root
     # Excluded from the denominator, like NEEDS_REVIEW: the formula could not be
     # responsibly run on the evidence extracted, so scoring it either way would
@@ -89,7 +89,7 @@ class AritiqScore:
     total_checkable: int            # excludes UNCHECKED / NEEDS_REVIEW / PROPAGATED_ERROR
     needs_review: int = 0
     conflict: int = 0
-    # ---- Phase 3 ----
+    # ---- multi-document ----
     propagated_error: int = 0
     insufficient_evidence: int = 0
     # The original flat (unweighted) score, kept as a secondary displayed number
@@ -135,8 +135,8 @@ def compute_score(
 
     Returns BOTH a dependency-weighted score (`.score`, primary) and the flat
     unweighted score (`.unweighted_score`, secondary).  Pass `claims` to enable
-    dependency weighting via the Move 1 graph; omit it (or pass None) and the
-    weighted score simply equals the flat score — so every Phase 1/2 caller that
+    dependency weighting via the the provenance graph graph; omit it (or pass None) and the
+    weighted score simply equals the flat score — so every single-document caller that
     calls `compute_score(results)` keeps identical behavior.
     """
     counts = {s: 0 for s in VerificationStatus}
@@ -164,11 +164,11 @@ def compute_score(
             score_state="no_checkable_claims",
         )
 
-    # ---- Flat (unweighted) score: the original Phase 1/2 behavior -------------
+    # ---- Flat (unweighted) score: the original single-document behavior -------------
     flat_earned = sum(WEIGHTS[r.status] for r in checkable)
     flat_score = (flat_earned / len(checkable)) * 100.0
 
-    # ---- Dependency-weighted score (Move 3) -----------------------------------
+    # ---- Dependency-weighted score (the weighted score) -----------------------------------
     weighted_score = _weighted_score(checkable, claims, fallback=flat_score)
 
     return AritiqScore(

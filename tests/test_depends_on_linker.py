@@ -1,5 +1,5 @@
 """
-Phase 2 / item 1 — deterministic depends_on linker.
+cross-statement / item 1 — deterministic depends_on linker.
 
 Every test pins one safety property. The linker's whole job is to add output->input
 edges where a claim's operand is another claim's COMPUTED output, while never adding a

@@ -1,17 +1,12 @@
-# Aritiq backend
+# Aritiq local backend
 fastapi>=0.110
 uvicorn[standard]>=0.29
 pydantic>=2
+python-dotenv>=1.0   # loads your .env (BYOK settings) — see .env.example
 certifi>=2023.7.22   # CA bundle for verifying sec.gov TLS (SEC EDGAR fetch)
 
-# Inherited from the core package (verifier + extractor):
-#   pydantic (above)
-# Optional model backends for auditing CUSTOM documents (bundled examples
-# replay without a key):
-#   pip install anthropic        # default provider
-#   pip install openai           # set ARITIQ_PROVIDER=openai
-google-genai==2.10.0
-
-# Auth + per-user rate limiting (Supabase Google sign-in gates /audit*)
-PyJWT[crypto]==2.10.1   # verifies Supabase session JWTs (ES256 via JWKS or legacy HS256)
-upstash-redis==1.7.0    # per-user rate-limit counters; falls back to in-memory if unset
+# Optional model backends for auditing CUSTOM documents (the bundled examples
+# replay without any key). Install ONLY the one matching ARITIQ_PROVIDER:
+#   pip install anthropic        # ARITIQ_PROVIDER=anthropic (default)
+#   pip install openai           # ARITIQ_PROVIDER=openai (also used for groq)
+#   pip install google-genai     # ARITIQ_PROVIDER=gemini

@@ -1,5 +1,5 @@
 """
-Phase 3 end-to-end backend test — the Vesper Materials document pair.
+multi-document end-to-end backend test — the Vesper Materials document pair.
 
 This suite exists because four live runs of a TWO-DOCUMENT input failed in ways
 that turned out to share one root cause: the registry / conflict / restatement
@@ -11,12 +11,12 @@ hand-grounded claims carrying explicit doc_ids — i.e. they assume extraction d
 its job — and prove that EVERY component then computes the correct verdict on the
 Vesper figures:
 
-  Phase 1 arithmetic        — revenue growth (against the RESTATED base), margin
-  Phase 2 internal-consistency — balance-sheet identity, EPS (diluted), cash tie-out
-  Phase 2 cross-document    — the FY2024 revenue CONFLICT ($740M vs $710M restated)
-  Phase 3 Move 2            — that conflict classified EXPLICIT_RESTATEMENT
-  Phase 3 Move 1            — propagation from the disputed base into derived claims
-  Phase 3 Move 3            — dependency-weighted score reflects the upstream root
+  summary-audit arithmetic        — revenue growth (against the RESTATED base), margin
+  cross-statement internal-consistency — balance-sheet identity, EPS (diluted), cash tie-out
+  cross-statement cross-document    — the FY2024 revenue CONFLICT ($740M vs $710M restated)
+  multi-document the restatement classifier            — that conflict classified EXPLICIT_RESTATEMENT
+  multi-document the provenance graph            — propagation from the disputed base into derived claims
+  multi-document the weighted score            — dependency-weighted score reflects the upstream root
 
 The Vesper ground truth (built to be exact):
   Doc A (FY2024 10-K):     revenue 740, COGS 481, GP 259, assets 1950, liab 1120,
@@ -96,7 +96,7 @@ def _registry() -> DocumentRegistry:
 
 
 # ===========================================================================
-# Phase 1 — arithmetic on the summary's own claims (grounded to the RIGHT doc)
+# summary-audit — arithmetic on the summary's own claims (grounded to the RIGHT doc)
 # ===========================================================================
 
 class TestPhase1Arithmetic:
@@ -170,7 +170,7 @@ class TestPhase1Arithmetic:
 
 
 # ===========================================================================
-# Phase 2 — internal consistency on the correct document
+# cross-statement — internal consistency on the correct document
 # ===========================================================================
 
 class TestPhase2InternalConsistency:
@@ -222,7 +222,7 @@ class TestPhase2InternalConsistency:
 
 
 # ===========================================================================
-# Phase 2 cross-document — the FY2024 revenue CONFLICT (failed 4x live)
+# cross-statement cross-document — the FY2024 revenue CONFLICT (failed 4x live)
 # ===========================================================================
 
 class TestCrossDocumentConflict:
@@ -248,7 +248,7 @@ class TestCrossDocumentConflict:
 
 
 # ===========================================================================
-# Phase 3 Move 2 — classify that conflict via the filer's disclosure language
+# multi-document the restatement classifier — classify that conflict via the filer's disclosure language
 # ===========================================================================
 
 class TestRestatementClassification:
@@ -264,7 +264,7 @@ class TestRestatementClassification:
 
 
 # ===========================================================================
-# Phase 3 Move 1 + Move 3 — propagation from the disputed base, weighted score
+# multi-document the provenance graph + the weighted score — propagation from the disputed base, weighted score
 # ===========================================================================
 
 class TestPropagationAndScore:

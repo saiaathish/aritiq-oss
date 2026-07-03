@@ -5,7 +5,7 @@ and the mezzanine / temporary-equity completeness gate (Welltower / UPREIT class
 Both fixes only ever RELAX a would-be WRONG_MATH into VERIFIED (rounding-explained)
 or INSUFFICIENT_EVIDENCE (incomplete equity picture) — never the other way — and each
 ships with a NON-WEAKENING guard proving a genuine error still convicts. See
-benchmark/reliability/STATUS.md ("Phase 1 — closing the 7 WRONG_MATH cases").
+benchmark/reliability/STATUS.md ("summary-audit — closing the 7 WRONG_MATH cases").
 """
 from aritiq.core.schema import (
     Claim, Operation, Operand, EPSVariant, VerificationStatus,

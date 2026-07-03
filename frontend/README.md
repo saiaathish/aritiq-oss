@@ -26,13 +26,9 @@ uvicorn backend.app:app --reload --port 8000
 ```
 
 The backend serves the bundled example documents **without an API key** (it
-replays the saved Day 2 extractions). To audit your own documents, set a model
-key first:
-
-```bash
-export ANTHROPIC_API_KEY=sk-...        # default provider
-# or: export OPENAI_API_KEY=...  ARITIQ_PROVIDER=openai
-```
+replays saved extractions). To audit your own documents, bring your own model
+key: copy `.env.example` in the repo root to `.env` and fill in your provider
+and key (anthropic / openai / gemini / groq). See the root README for details.
 
 ### 2. Frontend (this directory)
 

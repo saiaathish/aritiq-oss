@@ -1,19 +1,19 @@
 # Core
-pydantic>=2          # strict validation of LLM-extracted claims
+pydantic>=2          # strict validation of extracted claims
 certifi>=2023.7.22   # CA bundle for verifying sec.gov TLS (SEC EDGAR fetch)
+python-dotenv>=1.0   # loads your .env (BYOK settings) — see .env.example
 
-# API (required for api/main.py — Vercel's Python builder reads deps from
-# this root requirements.txt, not backend/requirements.txt)
+# Local API server (backend/app.py + the Next.js UI talk to this)
 fastapi>=0.110
 uvicorn[standard]>=0.29
-google-genai==2.10.0
-PyJWT[crypto]==2.10.1   # verifies Supabase session JWTs
-upstash-redis==1.7.0    # per-user rate-limit counters; falls back to in-memory if unset
 
 # Dev / test
 pytest>=7
 
-# Model backends — install the one you call (NOT needed for the verifier,
-# the tests, or the offline `--replay` benchmark, which use saved outputs):
-#   pip install anthropic
-#   pip install openai
+# Model backends (BYOK) — install ONLY the one matching ARITIQ_PROVIDER.
+# None of these are needed for the verifier, the tests, or the offline
+# replay demo, which run without any model or key.
+#   anthropic ->  pip install anthropic
+#   openai    ->  pip install openai
+#   gemini    ->  pip install google-genai
+#   groq      ->  pip install openai        (Groq uses the OpenAI-compatible API)

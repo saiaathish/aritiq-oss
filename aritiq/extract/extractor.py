@@ -6,7 +6,7 @@ thin.  All the *judgment* lives in the prompt; all the *safety* lives in
 schema.parse_claims (hard Pydantic validation).  This file just moves bytes:
 build the prompt, call a model, hand the text to the validator.
 
-Firewall: this module imports the Day 1 schema (to produce Claim objects) and
+Firewall: this module imports the core schema (to produce Claim objects) and
 the prompt/validator.  It does NOT import aritiq.core.verify or score, and
 nothing in the verification path imports this.  `grep -r verify` here returns
 nothing.
@@ -33,7 +33,7 @@ CompletionFn = Callable[[str, str], str]
 
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 DEFAULT_OPENAI_MODEL = "gpt-4o"
-DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
 DEFAULT_GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 DEFAULT_MAX_TOKENS = 8192
@@ -77,13 +77,8 @@ def _anthropic_client(model: str, max_tokens: int) -> CompletionFn:
             "anthropic) or pass your own complete_fn to extract_claims()."
         ) from exc
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY is not set. Export it, or pass complete_fn to "
-            "extract_claims() to run with a different backend."
-        )
-
+    from .. import config
+    api_key = config.require_key("anthropic")
     client = anthropic.Anthropic(api_key=api_key)
 
     def complete(system_prompt: str, user_prompt: str) -> str:
@@ -112,13 +107,8 @@ def _openai_client(model: str, max_tokens: int) -> CompletionFn:
             "openai) or pass your own complete_fn to extract_claims()."
         ) from exc
 
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "OPENAI_API_KEY is not set. Export it, or pass complete_fn to "
-            "extract_claims() to run with a different backend."
-        )
-
+    from .. import config
+    api_key = config.require_key("openai")
     client = openai.OpenAI(api_key=api_key)
 
     def complete(system_prompt: str, user_prompt: str) -> str:
@@ -145,13 +135,8 @@ def _groq_client(model: str, max_tokens: int) -> CompletionFn:
             "Install it (pip install openai) or pass complete_fn."
         ) from exc
 
-    api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "GROQ_API_KEY is not set. Export it, or pass complete_fn to "
-            "extract_claims() to run with a different backend."
-        )
-
+    from .. import config
+    api_key = config.require_key("groq")
     client = openai.OpenAI(api_key=api_key, base_url=GROQ_BASE_URL)
 
     def complete(system_prompt: str, user_prompt: str) -> str:
@@ -179,13 +164,8 @@ def _gemini_client(model: str, max_tokens: int) -> CompletionFn:
             "Install it (pip install google-genai) or pass complete_fn."
         ) from exc
 
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not set. Export it, or pass complete_fn to "
-            "extract_claims() to run with a different backend."
-        )
-
+    from .. import config
+    api_key = config.require_key("gemini")
     client = genai.Client(api_key=api_key)
 
     def complete(system_prompt: str, user_prompt: str) -> str:
@@ -205,7 +185,7 @@ def _gemini_client(model: str, max_tokens: int) -> CompletionFn:
 
 def _default_complete_fn(provider: str, model: Optional[str], max_tokens: int) -> tuple[CompletionFn, str, str]:
     """Resolve provider/model and return (complete_fn, provider, model)."""
-    provider = (provider or os.environ.get("ARITIQ_PROVIDER") or "gemini").lower()
+    provider = (provider or os.environ.get("ARITIQ_PROVIDER") or "anthropic").lower()
     model = model or os.environ.get("ARITIQ_EXTRACT_MODEL")
 
     if provider == "anthropic":
@@ -269,7 +249,7 @@ def extract_claims(
     raw = complete_fn(system_prompt, user_prompt)
     claims, issues = parse_claims(raw)
 
-    # Populate depends_on edges (Phase 2, item 1). The prompt asks the LLM to tag
+    # Populate depends_on edges (cross-statement, item 1). The prompt asks the LLM to tag
     # output->input edges; this deterministic pass adds any it missed, so the
     # provenance graph / weighted score / restatement machinery actually receive
     # structure on real extraction. Pure code, extraction-side — the firewall is

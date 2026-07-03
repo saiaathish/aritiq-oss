@@ -1,5 +1,5 @@
 """
-Cross-document conflict-figure extraction (Phase 3 wiring).
+Cross-document conflict-figure extraction (multi-document wiring).
 
 Problem this closes
 -------------------

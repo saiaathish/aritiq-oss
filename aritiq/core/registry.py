@@ -32,7 +32,7 @@ class FigureConflict:
     doc_b: str
     value_b: float
 
-    # ---- Phase 3 / Move 2 fields (optional; default = unclassified) --------
+    # ---- the restatement classifier fields (optional; default = unclassified) --------
     # The disclosure-language annotation, set by classify_restatement().  Default
     # UNCLASSIFIED until classification runs.  This is NOT a determination of what
     # kind of restatement occurred — see RestatementType's docstring.

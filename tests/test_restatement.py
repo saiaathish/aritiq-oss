@@ -1,5 +1,5 @@
 """
-Phase 3 / Move 2 test suite — restatement DISCLOSURE-LANGUAGE classification.
+the restatement classifier test suite — restatement DISCLOSURE-LANGUAGE classification.
 
 Constructed ground truth, no LLM. The classifier is a deterministic context-
 string lookup, so these tests pin exact behavior, including the boundary case the

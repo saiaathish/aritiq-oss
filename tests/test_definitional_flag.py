@@ -1,5 +1,5 @@
 """
-Logical / definitional flagging test suite (Phase 2, §3.4).
+Logical / definitional flagging test suite (cross-statement, §3.4).
 
 This feature is a FLAG, not a verifier.  The discipline under test: a
 qualitative word ("flat") next to a number is detected and routed to

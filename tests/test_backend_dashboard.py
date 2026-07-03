@@ -1,6 +1,6 @@
 """Offline tests for GET /dashboard/{ticker} — monkeypatched data, no network.
 
-Pins the surfacing contract of Phase 3 item 2: five deterministic panels, the
+Pins the surfacing contract of the risk dashboard: five deterministic panels, the
 restatement panel UNASSESSED on single-filing data, and a clean 404 (not a
 fabricated dashboard) when no cached verdicts exist.
 """

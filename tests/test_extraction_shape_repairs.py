@@ -1,4 +1,4 @@
-"""Regression tests for narrow extraction-shape repairs found in Phase 3 live demo.
+"""Regression tests for narrow extraction-shape repairs found in multi-document live demo.
 
 The verifier stays strict. These tests pin parser-side cleanup for cases where
 the live model provides the right grounded numbers but the wrong operation shape.

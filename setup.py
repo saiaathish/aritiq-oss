@@ -6,12 +6,14 @@ setup(
     packages=find_packages(),
     python_requires=">=3.9",
     install_requires=[
-        "pydantic>=2",          # strict validation of LLM extraction output
+        "pydantic>=2",          # strict validation of extraction output
         "certifi>=2023.7.22",   # CA bundle for verifying sec.gov TLS (EDGAR fetch)
+        "python-dotenv>=1.0",   # loads your .env (BYOK settings)
     ],
     extras_require={
-        # Model backends — install whichever you call. Neither is required to
-        # run the verifier, the tests, or the offline (replay) benchmark.
+        # Model backends (BYOK) — install whichever matches ARITIQ_PROVIDER.
+        # None are required to run the verifier, the tests, or the offline
+        # (replay) demo.
         "anthropic": ["anthropic>=0.39"],
         "openai": ["openai>=1.0"],
         "gemini": ["google-genai>=1.0"],

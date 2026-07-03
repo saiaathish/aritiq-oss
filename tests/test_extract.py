@@ -1,5 +1,5 @@
 """
-Tests for the Day 2 extraction stage.
+Tests for the extraction extraction stage.
 
 None of these tests call an LLM or need an API key — every model response is
 injected as a string through a fake complete_fn.  They exercise the three things

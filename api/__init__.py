@@ -1,1 +1,0 @@
-"""Aritiq demo API package."""
