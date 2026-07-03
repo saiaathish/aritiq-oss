@@ -1,4 +1,5 @@
 # Aritiq
+**https://aritiq.vercel.app
 
 **Aritiq verifies AI-generated financial summaries by tracing numeric claims to source numbers and checking the arithmetic deterministically.**
 
